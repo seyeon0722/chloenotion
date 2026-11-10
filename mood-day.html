@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mood — one day</title>
+<!--
+  chloe-mood-day.html — one day of the martini mood log, for a day tab in Notion (/embed)
+  Shares its data with chloe-mood-martini.html (mood.html): same localStorage log "chloe_mood_log_v1",
+  same format { "yyyy-mm-dd": { i: 0-4, m: "calm", t: timestamp } }, so a pick in either shows up in the other.
+  Mood names come from the main mood widget's settings ("chloe_mood_martini_v1"), so renames carry over.
+  ?day=sun|mon|tue|wed|thu|fri|sat pins it to that weekday of the current week (weeks start on sunday).
+  Without it, it shows today. Tap a glass to log; tap it again to clear. Future days can't be logged yet.
+  Fonts: Lyon Text if installed (Notion's serif), otherwise Source Serif 4 from Google Fonts. No tracking, no other scripts.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400;1,8..60,500&display=swap" rel="stylesheet">
+<script>
+/* ======================================================================
+   CONFIG — defaults (the mood names follow the main mood widget's settings when it has any)
+   ====================================================================== */
+const CONFIG = {
+  moods: ["glowing", "calm", "okay", "tired", "heavy"],   // five, happiest first
+  weekStart: 0,                    // 0 = sunday (matches the daily hub tabs), 1 = monday
+  ask: "how did it feel?",         // shown before anything is logged
+  future: "not here yet"           // shown for a day later this week
+};
+/* ====================================================================== */
+</script>
+<style>
+:root{
+  --ink:#f2f2f2; --soft:rgba(242,242,242,.62); --mute:rgba(242,242,242,.4); --hair:rgba(255,255,255,.08);
+  --card:#161616; --panel:#202020;
+  --serif:"Lyon-Text","Lyon Text","Source Serif 4",Georgia,ui-serif,serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:transparent}
+body{padding:10px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+[hidden]{display:none!important}
+.card{position:relative;width:100%;max-width:250px;margin:0 auto;border-radius:18px;background:var(--card);border:1px solid var(--hair)}
+.pad{padding:20px 16px 18px}
+.mast{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:0 2px}
+.day{font:400 20px/1.1 var(--serif);letter-spacing:-.01em;min-width:0;overflow-wrap:anywhere}
+.day i{display:block;font:italic 400 13.5px/1.3 var(--serif);color:var(--mute);margin-top:3px;letter-spacing:0}
+.tag{font:italic 400 12.5px/1 var(--serif);color:var(--mute);white-space:nowrap;padding-top:.45em}
+.big{display:flex;justify-content:center;margin-top:26px;color:var(--ink)}
+.big svg{width:88px;height:88px;display:block;overflow:visible}
+.big svg *{vector-effect:non-scaling-stroke;stroke-width:1.5px}
+.big.none{color:var(--mute);opacity:.55}
+.big.fut{opacity:.3}
+.said{font:italic 400 14px/1.35 var(--serif);color:var(--soft);text-align:center;margin-top:12px;min-height:1.35em;padding:0 4px}
+.said.empty{color:var(--mute)}
+.pick{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:22px;padding-top:14px;border-top:1px solid var(--hair)}
+.pick button{display:flex;align-items:center;justify-content:center;height:40px;min-width:0;padding:0;background:transparent;border:1px solid transparent;border-radius:10px;
+  color:var(--mute);cursor:pointer;transition:color .2s,border-color .2s,background .2s}
+.pick button:hover{color:var(--soft);background:var(--panel)}
+.pick button:focus-visible{outline:none;border-color:rgba(255,255,255,.3)}
+.pick button.on{color:var(--ink);background:var(--panel);border-color:rgba(255,255,255,.2)}
+.pick button:disabled{cursor:default;opacity:.35;background:transparent}
+.pick svg{width:26px;height:26px;display:block;overflow:visible}
+.pick svg *{vector-effect:non-scaling-stroke;stroke-width:1.2px}
+.pop{animation:pop .5s cubic-bezier(.2,.7,.2,1)}
+@keyframes pop{0%{transform:scale(.86);opacity:.4}100%{transform:none;opacity:1}}
+.rise{opacity:0;transform:translateY(6px);animation:rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}
+@keyframes rise{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}.pop{animation:none}}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="pad">
+    <div class="mast rise d1"><div class="day" id="day"></div><span class="tag" id="tag"></span></div>
+    <div class="big rise d2" id="big" aria-hidden="true"></div>
+    <div class="said rise d2" id="said" aria-live="polite"></div>
+    <div class="pick rise d3" id="pick" role="radiogroup" aria-label="mood"></div>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  const LOG = "chloe_mood_log_v1", MOODCFG = "chloe_mood_martini_v1", KEEP = 90;   // shared with chloe-mood-martini.html
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const dayKey = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const addDays = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x; };
+  const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const param = (new URLSearchParams(location.search).get("day") || "").slice(0, 3).toLowerCase();
+  const pinned = DAYS.indexOf(param);   // -1 = follow today
+
+  function moods(){
+    const m = read(MOODCFG).moods, out = Array.isArray(m) ? m.slice(0, 5) : [];
+    while (out.length < 5) out.push(CONFIG.moods[out.length]);
+    return out;
+  }
+  function target(){
+    const now = new Date();
+    if (pinned < 0) return addDays(now, 0);
+    const start = addDays(now, -((now.getDay() - CONFIG.weekStart + 7) % 7));
+    return addDays(start, (pinned - CONFIG.weekStart + 7) % 7);
+  }
+
+  // same martini glass as chloe-mood-martini.html: full (with the olive) for the brightest, empty for the heaviest
+  const LEVEL = [1, .8, .6, .4, 0];
+  function glyph(i){
+    const h = LEVEL[i], top = 3.5, tip = 14, half = 9.5;
+    let liquid = "";
+    if (h > 0){
+      const y = tip - (tip - top - 1) * h, w = (tip - y) * half / (tip - top) - .7;
+      liquid = '<path d="M' + (12 - w).toFixed(2) + " " + y.toFixed(2) + " L" + (12 + w).toFixed(2) + " " + y.toFixed(2) + " L12 " + (tip - .8).toFixed(2) + ' Z" fill="currentColor" fill-opacity=".62" stroke="none"/>';
+    }
+    const olive = i === 0 ? '<path d="M8.4 .6 L14.6 8.6" stroke-width="1"/><circle cx="13" cy="6.8" r="2.1" fill="var(--card)" stroke-width="1.1"/>' : "";
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">' +
+      liquid + '<path d="M2.5 3.5 H21.5 L12 14 Z"/><path d="M12 14 V21 M8 21 H16"/>' + olive + "</svg>";
+  }
+
+  let popIdx = -1;
+  function render(){
+    const d = target(), key = dayKey(d), today = dayKey(new Date()), M = moods(), log = read(LOG);
+    const e = log[key], cur = e && typeof e.i === "number" && e.i >= 0 && e.i < 5 ? e.i : -1;
+    const future = key > today;
+    const wd = d.toLocaleDateString("en-US", {weekday: "long"}).toLowerCase();
+    $("#day").innerHTML = esc(wd) + "<i>" + esc(d.toLocaleDateString("en-US", {month: "short", day: "numeric"}).toLowerCase()) + "</i>";
+    const diff = Math.round((new Date(d) - new Date(today.replace(/-/g, "/"))) / 864e5);
+    $("#tag").textContent = diff === 0 ? "today" : diff === -1 ? "yesterday" : diff === 1 ? "tomorrow" : "";
+    $("#pick").innerHTML = M.map((m, i) =>
+      '<button type="button" role="radio" aria-checked="' + (i === cur) + '" aria-label="' + esc(m) + '" data-i="' + i + '" class="' + (i === cur ? "on" : "") + '" title="' + esc(m) + '"' + (future ? " disabled" : "") + ">" + glyph(i) + "</button>").join("");
+    const big = $("#big");
+    big.className = "big" + (cur < 0 ? " none" : "") + (future ? " fut" : "");
+    big.innerHTML = '<span class="' + (popIdx === cur && cur >= 0 ? "pop" : "") + '" style="display:block">' + glyph(cur >= 0 ? cur : 4) + "</span>";
+    popIdx = -1;
+    const said = $("#said");
+    if (future){ said.textContent = CONFIG.future; said.classList.add("empty"); }
+    else if (cur >= 0){
+      const t = e.t ? new Date(e.t) : null, tm = t && dayKey(t) === key ? " · " + t.toLocaleTimeString("en-US", {hour: "numeric", minute: "2-digit"}).toLowerCase() : "";
+      said.textContent = "felt " + M[cur] + tm; said.classList.remove("empty");
+    } else { said.textContent = CONFIG.ask; said.classList.add("empty"); }
+  }
+
+  $("#pick").addEventListener("click", ev => {
+    const b = ev.target.closest("button"); if (!b || b.disabled) return;
+    const i = +b.dataset.i, key = dayKey(target());
+    const log = read(LOG);                                   // re-read so we never overwrite a pick made elsewhere
+    if (log[key] && log[key].i === i) delete log[key];
+    else { log[key] = {i, m: moods()[i], t: Date.now()}; popIdx = i; }
+    const cut = dayKey(addDays(new Date(), -KEEP));          // same 90-day window as the main mood widget
+    Object.keys(log).forEach(k => { if (k < cut) delete log[k]; });
+    write(LOG, log);
+    render();
+  });
+
+  window.addEventListener("storage", e => { if (e.key === LOG || e.key === MOODCFG || e.key === null) render(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+  render();
+  setTimeout(function tick(){ render(); setTimeout(tick, 60000 - Date.now() % 60000 + 50); }, 60000 - Date.now() % 60000 + 50);
+})();
+</script>
+</body>
+</html>
