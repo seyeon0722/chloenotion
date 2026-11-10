@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mood — martini</title>
+<!--
+  chloe-mood-martini.html — minimal monochrome mood log (martini-glass variant) for Notion /embed (companion to chloe-hello.html)
+  Pick how today felt; tap the same mood again to clear it. The strip shows the last 7 days.
+  Fonts: Lyon Text if installed (Notion's serif), otherwise Source Serif 4 from Google Fonts.
+  No tracking, no other scripts. Click the question or the small note to edit; ••• (on hover) for settings.
+  Everything is saved in this browser only (localStorage), last 90 days kept.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&display=swap" rel="stylesheet">
+<script>
+/* ======================================================================
+   CONFIG — defaults. Changes made in the widget override these
+   (in this browser) until you press Reset.
+   ====================================================================== */
+const CONFIG = {
+  question: "how did today feel?",
+  moods: ["glowing", "calm", "okay", "tired", "heavy"],   // five, happiest first
+  strip: "last7",                  // "last7" (rolling) | "week" (this week, mon – sun)
+  showDate: true,                  // the small "nov 9" mark, top right
+  note: "be gentle with yourself"  // the quiet line under the picker ("" to hide)
+};
+/* ====================================================================== */
+</script>
+<style>
+:root{
+  --ink:#f2f2f2; --soft:rgba(242,242,242,.62); --mute:rgba(242,242,242,.4); --faint:rgba(242,242,242,.18); --hair:rgba(255,255,255,.08);
+  --card:#161616; --panel:#202020;
+  --serif:"Lyon-Text","Lyon Text","Source Serif 4",Georgia,ui-serif,serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:transparent}
+body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+[hidden]{display:none!important}
+
+/* ---------- card: flat, hairline only ---------- */
+.card{position:relative;max-width:880px;margin:0 auto;border-radius:20px;background:var(--card);border:1px solid var(--hair);container-type:inline-size}
+.pad{padding:clamp(20px,4.6cqi,38px) clamp(22px,5.6cqi,48px) clamp(20px,4.6cqi,38px)}
+
+/* ---------- top ---------- */
+.mast{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+.ask{font:400 clamp(24px,4.6cqi,36px)/1.15 var(--serif);letter-spacing:-.012em;color:var(--ink);min-width:0;overflow-wrap:anywhere;padding:0 2px;margin-left:-2px}
+.idx{font:italic 400 clamp(14px,2cqi,16px)/1 var(--serif);color:var(--mute);white-space:nowrap;margin-right:34px}
+.idx b{font-style:normal;font-weight:600;color:var(--soft)}
+
+/* ---------- picker: five flat panels ---------- */
+.pick{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:clamp(6px,1.4cqi,12px);margin-top:clamp(18px,3.6cqi,28px)}
+.pick button{display:flex;flex-direction:column;align-items:center;gap:clamp(8px,1.6cqi,12px);min-width:0;
+  padding:clamp(14px,2.8cqi,22px) 4px clamp(12px,2.4cqi,18px);background:var(--panel);border:1px solid transparent;border-radius:12px;
+  color:var(--mute);font:400 clamp(13px,2.1cqi,16px)/1.1 var(--serif);cursor:pointer;transition:color .2s,border-color .2s,background .2s}
+.pick button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.pick button:hover{color:var(--soft);background:#242424}
+.pick button:focus-visible{outline:none;border-color:rgba(255,255,255,.3)}
+.pick button.on{color:var(--ink);border-color:rgba(255,255,255,.22)}
+.pick button.on span{font-style:italic}
+.pick svg{width:clamp(34px,6.4cqi,46px);height:clamp(34px,6.4cqi,46px);display:block;overflow:visible}
+.pop{animation:pop .5s cubic-bezier(.2,.7,.2,1)}
+@keyframes pop{0%{transform:scale(.82);opacity:.4}100%{transform:none;opacity:1}}
+
+/* ---------- status + note ---------- */
+.status{display:flex;justify-content:space-between;align-items:baseline;gap:12px 20px;flex-wrap:wrap;margin-top:clamp(12px,2.4cqi,16px);min-height:1.4em}
+.said{font:italic 400 clamp(14px,2.2cqi,16px)/1.4 var(--serif);color:var(--soft)}
+.said.empty{color:var(--mute)}
+.note{font:italic 400 clamp(14px,2.2cqi,16px)/1.4 var(--serif);color:var(--mute);padding:0 2px;margin-left:auto;text-align:right}
+.rule{height:1px;background:var(--hair);margin:clamp(16px,3cqi,22px) 0 0}
+
+/* ---------- week strip ---------- */
+.wkhead{display:flex;justify-content:space-between;align-items:baseline;margin-top:clamp(14px,2.8cqi,20px)}
+.wkhead .t{font:400 clamp(15px,2.4cqi,18px)/1 var(--serif);color:var(--ink)}
+.wkhead .n{font:italic 400 clamp(13px,2cqi,15px)/1 var(--serif);color:var(--mute)}
+.strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:clamp(4px,1cqi,8px);margin-top:clamp(12px,2.4cqi,16px)}
+.strip div{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;padding:clamp(10px,2cqi,14px) 2px;border-radius:12px;color:var(--soft)}
+.strip svg{width:clamp(24px,4.2cqi,30px);height:clamp(24px,4.2cqi,30px);display:block;overflow:visible}
+.strip span{font:400 clamp(12px,1.9cqi,14px)/1 var(--serif);color:var(--mute)}
+.strip .td{background:var(--panel);color:var(--ink)}
+.strip .td span{color:var(--ink);font-style:italic}
+.strip .fu{opacity:.35}
+
+/* ---------- click-to-edit (invisible until hover) ---------- */
+[contenteditable]{outline:none;border-radius:6px;cursor:text;transition:background .2s}
+[contenteditable]:hover{background:rgba(255,255,255,.045)}
+[contenteditable]:focus{background:rgba(255,255,255,.07)}
+[contenteditable]:empty::before{content:attr(data-ph);opacity:.45}
+
+.menu{position:absolute;top:clamp(14px,3.6cqi,30px);right:clamp(14px,3.6cqi,30px);z-index:3;border:1px solid transparent;background:transparent;color:var(--mute);
+  width:30px;height:22px;border-radius:11px;font:600 12px/1 system-ui,sans-serif;letter-spacing:1px;cursor:pointer;opacity:0;transition:color .2s,border-color .2s,opacity .25s}
+.card:hover .menu,.menu.on,.menu:focus-visible{opacity:1}
+@media (hover:none){.menu{opacity:.55}}
+.menu:hover,.menu.on{color:var(--ink);border-color:var(--hair)}
+.menu:focus-visible{border-color:rgba(255,255,255,.3);outline:none}
+
+/* ---------- entrance ---------- */
+.rise{opacity:0;transform:translateY(6px);animation:rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.35s}.d5{animation-delay:.45s}
+@keyframes rise{to{opacity:1;transform:none}}
+.fade{animation:fade .5s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}.fade,.pop{animation:none}}
+
+/* ---------- settings ---------- */
+.cfg .title{font:700 clamp(24px,4cqi,30px)/1.1 var(--serif);letter-spacing:-.012em;margin:0 0 4px}
+.cfg .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 30px}
+@container (max-width:540px){.cfg .grid{grid-template-columns:1fr}}
+.cfg label{display:block;font:600 13.5px/1 var(--serif);color:var(--soft);margin:16px 0 7px}
+.cfg input[type=text],.cfg textarea{width:100%;background:var(--panel);border:1px solid transparent;border-radius:10px;color:var(--ink);
+  padding:9px 12px;font:400 15.5px/1.4 var(--serif);outline:none;transition:border-color .2s}
+.cfg textarea{min-height:150px;resize:vertical}
+.cfg input:focus,.cfg textarea:focus{border-color:rgba(255,255,255,.25)}
+.cfg .opts{display:flex;flex-wrap:wrap;gap:0 18px}
+.seg{display:inline-flex;background:var(--panel);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--soft);font:400 14px/1 var(--serif);padding:8px 13px;border-radius:999px;cursor:pointer;transition:background .2s,color .2s}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#161616}
+.foot{display:flex;gap:10px;align-items:center;margin-top:22px;flex-wrap:wrap}
+.btn{border:1px solid rgba(255,255,255,.14);background:transparent;color:var(--ink);font:600 14px/1 var(--serif);padding:10px 18px;border-radius:999px;cursor:pointer;transition:border-color .2s,background .2s}
+.btn:hover{border-color:rgba(255,255,255,.35)}
+.btn.solid{background:var(--ink);border-color:var(--ink);color:#161616}
+.btn.solid:hover{background:#fff}
+.ghost{margin-left:auto;border:0;background:none;color:var(--mute);font:italic 400 14.5px var(--serif);cursor:pointer}
+.ghost:hover{color:var(--ink)}
+.hint{font:italic 400 14px/1.45 var(--serif);color:var(--mute);margin-top:12px}
+
+/* ---------- narrow ---------- */
+@container (max-width:460px){
+  .pick button{padding:12px 2px 10px;border-radius:10px}
+  .pick button span{font-size:12px}
+  .strip span{font-size:11.5px}
+  .note{margin-left:0;text-align:left}
+}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <button class="menu" id="menu" aria-label="Settings" title="settings">•••</button>
+  <div class="pad">
+    <div id="view">
+      <div class="mast rise d1">
+        <div class="ask" id="ask" contenteditable="plaintext-only" spellcheck="false" data-ph="how did today feel?"></div>
+        <span class="idx" id="idx"></span>
+      </div>
+      <div class="pick rise d2" id="pick" role="radiogroup" aria-label="today's mood"></div>
+      <div class="status rise d3">
+        <span class="said" id="said"></span>
+        <span class="note" id="note" contenteditable="plaintext-only" spellcheck="false" data-ph="a quiet line"></span>
+      </div>
+      <div class="rule rise d4"></div>
+      <div class="wkhead rise d4"><span class="t" id="wkt">last seven days</span><span class="n" id="wkn"></span></div>
+      <div class="strip rise d5" id="strip"></div>
+    </div>
+    <div class="cfg" id="cfg" hidden></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const KEY = "chloe_mood_martini_v1", LOG = "chloe_mood_log_v1", KEEP = 90;
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+  let saved = read(KEY), S = merge(), log = read(LOG);
+  function merge(){
+    const s = Object.assign(clone(CONFIG), clone(saved));
+    const m = Array.isArray(s.moods) ? s.moods.slice(0, 5) : [];
+    while (m.length < 5) m.push(CONFIG.moods[m.length]);
+    s.moods = m;
+    return s;
+  }
+  function set(patch){ Object.assign(saved, patch); write(KEY, saved); S = merge(); }
+
+  // ---- dates ----
+  const dayKey = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const addDays = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x; };
+
+  // ---- glyph: a martini glass filled by mood — full (with an olive) for the brightest, empty for the heaviest ----
+  const LEVEL = [1, .8, .6, .4, 0];          // liquid height as a share of the bowl
+  function glyph(i){
+    if (i == null || i < 0) return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1.6" fill="currentColor" opacity=".35"/></svg>';
+    const h = LEVEL[i], top = 3.5, tip = 14, half = 9.5;   // bowl: (2.5,3.5)–(21.5,3.5) down to (12,14)
+    let liquid = "";
+    if (h > 0){
+      const y = tip - (tip - top - 1) * h, w = (tip - y) * half / (tip - top) - .7;
+      liquid = '<path d="M' + (12 - w).toFixed(2) + " " + y.toFixed(2) + " L" + (12 + w).toFixed(2) + " " + y.toFixed(2) + " L12 " + (tip - .8).toFixed(2) + ' Z" fill="currentColor" fill-opacity=".62" stroke="none"/>';
+    }
+    const olive = i === 0 ? '<path d="M8.4 .6 L14.6 8.6" stroke-width="1"/><circle cx="13" cy="6.8" r="2.1" fill="var(--card)" stroke-width="1.1"/>' : "";
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">' +
+      liquid + '<path d="M2.5 3.5 H21.5 L12 14 Z"/><path d="M12 14 V21 M8 21 H16"/>' + olive + "</svg>";
+  }
+
+  const put = (el, t) => { if (document.activeElement !== el && el.textContent !== t) el.textContent = t; };
+  let popIdx = -1;
+
+  function render(){
+    const now = new Date(), today = dayKey(now), cur = log[today] && typeof log[today].i === "number" ? log[today].i : -1;
+
+    put($("#ask"), S.question);
+    $("#idx").hidden = !S.showDate;
+    $("#idx").innerHTML = esc(now.toLocaleDateString("en-US", {month: "short"}).toLowerCase()) + " <b>" + now.getDate() + "</b>";
+
+    // picker
+    $("#pick").innerHTML = S.moods.map((m, i) =>
+      '<button type="button" role="radio" aria-checked="' + (i === cur) + '" data-i="' + i + '" class="' + (i === cur ? "on" : "") + '" title="' + esc(m) + '">' +
+      '<span class="g' + (i === popIdx ? " pop" : "") + '" style="display:block;padding:0">' + glyph(i) + "</span><span>" + esc(m) + "</span></button>").join("");
+    popIdx = -1;
+
+    // status
+    const said = $("#said");
+    if (cur >= 0){
+      const t = new Date(log[today].t || Date.now());
+      const tm = t.toLocaleTimeString("en-US", {hour: "numeric", minute: "2-digit"}).toLowerCase();
+      said.textContent = "today felt " + S.moods[cur] + " · " + tm; said.classList.remove("empty");
+    } else { said.textContent = "nothing logged yet today"; said.classList.add("empty"); }
+    put($("#note"), S.note);
+    $("#note").hidden = !S.note && document.activeElement !== $("#note");
+
+    // strip
+    let start;
+    if (S.strip === "week"){ const dow = (now.getDay() + 6) % 7; start = addDays(now, -dow); $("#wkt").textContent = "this week"; }
+    else { start = addDays(now, -6); $("#wkt").textContent = "last seven days"; }
+    let h = "", n = 0;
+    for (let k = 0; k < 7; k++){
+      const d = addDays(start, k), key = dayKey(d), e = log[key], i = e && typeof e.i === "number" ? e.i : -1, fut = key > today;
+      if (i >= 0) n++;
+      const wd = d.toLocaleDateString("en-US", {weekday: "short"}).toLowerCase();
+      h += '<div class="' + (key === today ? "td" : "") + (fut ? " fu" : "") + '" title="' + esc(wd + " " + d.getDate() + (i >= 0 ? " — " + S.moods[i] : "")) + '">' + glyph(i) + "<span>" + esc(wd) + "</span></div>";
+    }
+    $("#strip").innerHTML = h;
+    $("#wkn").textContent = n + " of 7 logged";
+  }
+
+  // ---- pick / clear ----
+  $("#pick").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    const i = +b.dataset.i, today = dayKey(new Date());
+    log = read(LOG);
+    if (log[today] && log[today].i === i) delete log[today];
+    else { log[today] = {i, m: S.moods[i], t: Date.now()}; popIdx = i; }
+    const cut = dayKey(addDays(new Date(), -KEEP));
+    Object.keys(log).forEach(k => { if (k < cut) delete log[k]; });
+    write(LOG, log);
+    render();
+    const nb = $('#pick button[data-i="' + i + '"]'); if (nb) nb.focus({preventScroll: true});
+  });
+
+  // ---- click-to-edit ----
+  function editable(el, commit){
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter"){ e.preventDefault(); el.blur(); }
+      if (e.key === "Escape"){ el.dataset.cancel = "1"; el.blur(); }
+    });
+    el.addEventListener("paste", e => {
+      e.preventDefault();
+      document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " "));
+    });
+    el.addEventListener("blur", () => {
+      if (el.dataset.cancel){ delete el.dataset.cancel; el.textContent = ""; }
+      else commit(el.textContent.replace(/\s+/g, " ").trim());
+      render();
+    });
+  }
+  editable($("#ask"), t => set({question: t || CONFIG.question}));
+  editable($("#note"), t => set({note: t}));
+
+  // ---- settings ----
+  const seg = (k, opts) => '<div class="seg" data-k="' + k + '">' + opts.map(([v, l]) =>
+    '<button type="button" class="' + (String(S[k]) === v ? "on" : "") + '" data-v="' + v + '">' + l + "</button>").join("") + "</div>";
+  function openCfg(){
+    const p = $("#cfg");
+    if (!p.hidden){ closeCfg(); return; }
+    p.innerHTML = '<div class="title">make it yours</div><div class="grid"><div>' +
+      '<label for="c-q">question</label><input id="c-q" type="text" maxlength="80" value="' + esc(S.question) + '">' +
+      '<label for="c-n">quiet line</label><input id="c-n" type="text" maxlength="80" placeholder="leave empty to hide" value="' + esc(S.note) + '">' +
+      '<div class="opts"><div><label>strip shows</label>' + seg("strip", [["last7","last 7 days"],["week","this week"]]) + "</div>" +
+      "<div><label>date mark</label>" + seg("showDate", [["true","show"],["false","hide"]]) + "</div></div>" +
+      '</div><div><label for="c-m">five moods — happiest first</label><textarea id="c-m" rows="5">' + esc(S.moods.join("\n")) + "</textarea>" +
+      '<div class="hint">tip — click the question or the quiet line to edit it in place. tap a mood again to clear today. saved in this browser only, last ' + KEEP + ' days kept.</div></div></div>' +
+      '<div class="foot"><button class="btn solid" id="c-save">save</button><button class="btn" id="c-cancel">cancel</button>' +
+      '<button class="ghost" id="c-reset">reset to defaults</button></div>';
+    const tmp = {strip: S.strip, showDate: String(S.showDate)};
+    p.querySelectorAll(".seg").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => {
+      tmp[sg.dataset.k] = b.dataset.v; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    }));
+    $("#c-save").onclick = () => {
+      const moods = $("#c-m").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 5);
+      set({question: $("#c-q").value.trim() || CONFIG.question, note: $("#c-n").value.trim(), strip: tmp.strip, showDate: tmp.showDate === "true",
+        moods: moods.length ? moods : clone(CONFIG.moods)});
+      closeCfg();
+    };
+    $("#c-cancel").onclick = closeCfg;
+    let armed = false;
+    $("#c-reset").onclick = e => {
+      if (!armed){ armed = true; e.target.textContent = "tap again to reset"; setTimeout(() => { armed = false; if (e.target.isConnected) e.target.textContent = "reset to defaults"; }, 2500); return; }
+      try { localStorage.removeItem(KEY); } catch (err) {}   // settings only — your mood log is kept
+      saved = {}; S = merge(); closeCfg();
+    };
+    $("#view").hidden = true; p.hidden = false; $("#menu").classList.add("on");
+  }
+  function closeCfg(){ $("#cfg").hidden = true; $("#cfg").innerHTML = ""; $("#view").hidden = false; $("#menu").classList.remove("on"); render(); }
+  $("#menu").addEventListener("click", openCfg);
+
+  window.addEventListener("storage", e => {
+    if (e.key === KEY){ saved = read(KEY); S = merge(); render(); }
+    if (e.key === LOG){ log = read(LOG); render(); }
+  });
+  render();
+  setTimeout(function tick(){ render(); setTimeout(tick, 60000 - Date.now() % 60000 + 50); }, 60000 - Date.now() % 60000 + 50);
+})();
+</script>
+</body>
+</html>
