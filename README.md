@@ -19,3 +19,4 @@ In Notion, type `/embed` and paste that URL.
 - [focus-tally](focus-tally.html) — this week's finished focus rounds — https://seyeon0722.github.io/chloenotion/focus-tally.html
 - [good record](good-record.html) — small good moments kept as tracks; `?demo=1` shows sample entries — https://seyeon0722.github.io/chloenotion/good-record.html
 - [matchbook](matchbook.html) — each small good moment strikes a match; `?demo=1` shows sample entries — https://seyeon0722.github.io/chloenotion/matchbook.html
+- [first thing](first-thing.html) — one small thing to start tomorrow; `?day=sun` through `?day=sat` pins it to a weekday; `?demo=1` shows sample text — https://seyeon0722.github.io/chloenotion/first-thing.html

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>first thing</title>
+<!--
+  chloe-first-thing.html — "tomorrow's first thing", a slim strip for the daily hub (Notion /embed, goes under the to-do table)
+  Night (6pm–4am): a moon. Write one small thing to start tomorrow with. Enter or click away saves it.
+  Day (4am–6pm): a sun. Shows today's first thing; the round tick on the right marks it done.
+  ?day=sun..sat pins it to that weekday of this week (weeks start Sunday): past days and today show the sun; future days show the moon and can be edited.
+  ?mode=night / ?mode=day force a mode for testing. ?demo=1 shows sample text and saves nothing.
+  Storage: localStorage "chloe_first_thing_v1" = { "yyyy-mm-dd": { t, done, ts } }, keyed by the day the note is FOR. Keeps the last 60 days.
+  Fonts: Lyon Text if installed (Notion's serif), otherwise Source Serif 4 from Google Fonts. No tracking, no other scripts.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;1,8..60,400&display=swap" rel="stylesheet">
+<script>
+/* ======================================================================
+   CONFIG — defaults
+   ====================================================================== */
+const CONFIG = {
+  nightFrom: 18,                                   // 6pm: the moon comes out, write for tomorrow
+  morningFrom: 4,                                  // 4am: the sun, today's first thing
+  placeholder: "one small thing to start with…",
+  emptyDay: "nothing set · write one tonight",
+  keepDays: 60
+};
+/* ====================================================================== */
+</script>
+<style>
+:root{
+  --ink:#f2f2f2; --soft:rgba(242,242,242,.62); --mute:rgba(242,242,242,.4); --faint:rgba(242,242,242,.26); --hair:rgba(255,255,255,.08);
+  --card:#161616; --panel:#202020;
+  --serif:"Lyon-Text","Lyon Text","Source Serif 4",Georgia,ui-serif,serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:transparent;color:var(--ink);font-family:var(--serif);font-weight:400;-webkit-font-smoothing:antialiased}
+body{padding:4px}
+.strip{container-type:inline-size;width:100%;min-height:64px;background:var(--card);border:1px solid var(--hair);border-radius:14px;
+  display:flex;align-items:center;gap:14px;padding:0 16px 0 18px;animation:in .5s ease both}
+@keyframes in{from{opacity:0}to{opacity:1}}
+.ico{position:relative;flex:none;width:22px;height:22px;color:var(--soft)}
+.ico svg{position:absolute;inset:0;width:22px;height:22px;transition:opacity .9s ease,transform .9s ease}
+.ico .sun{opacity:0;transform:rotate(-30deg) scale(.85)}
+.night .ico .moon{opacity:1;transform:none}
+.night .ico .sun{opacity:0;transform:rotate(-30deg) scale(.85)}
+.day .ico .moon{opacity:0;transform:rotate(20deg) scale(.85)}
+.day .ico .sun{opacity:1;transform:none}
+.lab{flex:none;font:italic 400 14px/1 var(--serif);color:var(--mute);white-space:nowrap}
+.rule{flex:none;width:1px;height:18px;background:var(--hair)}
+.line{flex:1 1 auto;min-width:0;display:flex;align-items:baseline;gap:18px;cursor:text}
+.txt{flex:0 1 auto;min-width:60px;font:400 16px/1.3 var(--serif);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;outline:none;cursor:text;padding:4px 0;
+  border-bottom:1px solid transparent;transition:color .4s,border-color .3s}
+.txt:focus{text-overflow:clip;border-bottom-color:var(--hair)}
+.txt:empty::before{content:attr(data-ph);color:var(--faint);font-style:italic}
+.txt.done{color:var(--mute);text-decoration:line-through;text-decoration-color:var(--faint);text-decoration-thickness:1px}
+.tick{flex:none;width:24px;height:24px;border:0;background:none;padding:0;color:var(--mute);cursor:pointer;border-radius:50%;transition:color .3s}
+.tick:hover,.tick:focus-visible{color:var(--ink);outline:none}
+.tick svg{width:24px;height:24px;display:block}
+.tick .chk{opacity:0;transition:opacity .35s}
+.tick[aria-pressed="true"]{color:var(--soft)}
+.tick[aria-pressed="true"] .chk{opacity:1}
+.tick[hidden]{display:none}
+.txt.kept{border-bottom-color:var(--mute)}
+@container (max-width:400px){ .rule{display:none} .lab{font-size:13px} .strip{gap:10px} }
+@container (max-width:330px){ .lab{display:none} }
+@media (prefers-reduced-motion:reduce){ .strip{animation:none} .ico svg,.tick .chk{transition:none} }
+</style>
+</head>
+<body>
+<div class="strip night" id="strip">
+  <span class="ico" aria-hidden="true">
+    <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5 8 8 0 1 0 19.5 14.6Z"/></svg>
+    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M5.5 18.5l1.6-1.6M16.9 7.1l1.6-1.6"/></svg>
+  </span>
+  <span class="lab" id="lab">tomorrow, first thing</span>
+  <span class="rule" aria-hidden="true"></span>
+  <span class="line">
+    <span class="txt" id="txt" role="textbox" aria-label="first thing" spellcheck="false"></span>
+  </span>
+  <button class="tick" id="tick" type="button" aria-pressed="false" aria-label="done" title="done" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path class="chk" d="M8 12.4l2.7 2.6L16.2 9.4"/></svg>
+  </button>
+</div>
+<script>
+(function(){
+  "use strict";
+  const KEY = "chloe_first_thing_v1";
+  const Q = new URLSearchParams(location.search), DEMO = Q.get("demo") === "1", MODE = (Q.get("mode") || "").toLowerCase();
+  const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"], LONG = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const PIN = DAYS.indexOf((Q.get("day") || "").toLowerCase().slice(0, 3));
+  const $ = s => document.querySelector(s);
+  const pad = n => String(n).padStart(2, "0");
+  const dayKey = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  const addDays = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x; };
+  const parseDay = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+  const okKey = k => /^\d{4}-\d{2}-\d{2}$/.test(k);
+  const ce = (() => { try { const s = document.createElement("span"); s.contentEditable = "plaintext-only"; return s.contentEditable === "plaintext-only" ? "plaintext-only" : "true"; } catch (e) { return "true"; } })();
+
+  // ---------- storage ----------
+  let demoMap = null;
+  function demoData(){
+    const now = new Date(), t = dayKey(now), m = {};
+    m[dayKey(addDays(now, -1))] = {t: "stretch before the phone", done: true, ts: 1};
+    m[t] = {t: "water, then ten quiet minutes with the book", done: false, ts: 2};
+    m[dayKey(addDays(now, 1))] = {t: "open the window, make the bed", done: false, ts: 3};
+    return m;
+  }
+  function read(){
+    if (DEMO) return Object.assign({}, demoMap || (demoMap = demoData()));
+    let raw = null;
+    try { raw = localStorage.getItem(KEY); } catch (e) { return {}; }
+    if (!raw) return {};
+    try { const v = JSON.parse(raw); if (v && typeof v === "object" && !Array.isArray(v)) return v; } catch (e) {}
+    try { if (!localStorage.getItem(KEY + "_backup")) localStorage.setItem(KEY + "_backup", raw); } catch (e) {}   // unexpected data: keep a copy, never lose it
+    return {};
+  }
+  function save(day, fn){
+    const m = read();                                     // re-read right before every save
+    fn(m, day);
+    const cut = dayKey(addDays(new Date(), -CONFIG.keepDays));
+    Object.keys(m).forEach(k => { if (okKey(k) && k < cut) delete m[k]; });   // trim only old dated notes
+    if (DEMO){ demoMap = m; return; }
+    try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
+  }
+
+  // ---------- which day / which mode ----------
+  function state(){
+    const now = new Date(), h = now.getHours(), today = dayKey(now);
+    const isNight = MODE === "night" ? true : MODE === "day" ? false : (h >= CONFIG.nightFrom || h < CONFIG.morningFrom);
+    const early = h < CONFIG.morningFrom;                 // 12–4am still counts as tonight
+    const nightTarget = early ? today : dayKey(addDays(now, 1));
+    if (PIN >= 0){
+      const ws = addDays(now, -now.getDay()), pinned = dayKey(addDays(ws, PIN));
+      if (pinned !== today){
+        const future = pinned > today;
+        return {night: future, target: pinned, label: LONG[PIN] + ", first thing", editable: true};
+      }
+    }
+    if (isNight) return {night: true, target: nightTarget, label: "tomorrow, first thing", editable: true};
+    return {night: false, target: today, label: "today, first thing", editable: true};
+  }
+
+  // ---------- render ----------
+  let cur = null;
+  function render(){
+    const s = state(), m = read(), n = m[s.target] && typeof m[s.target] === "object" ? m[s.target] : null;
+    cur = s;
+    const strip = $("#strip");
+    strip.classList.toggle("night", s.night); strip.classList.toggle("day", !s.night);
+    $("#lab").textContent = s.label;
+    const txt = $("#txt");
+    txt.dataset.ph = s.night ? CONFIG.placeholder : CONFIG.emptyDay;
+    if (document.activeElement !== txt) txt.textContent = n && n.t ? n.t : "";
+    txt.classList.toggle("done", !!(n && n.done && !s.night));
+    const tick = $("#tick");
+    tick.hidden = s.night || !(n && n.t);
+    tick.setAttribute("aria-pressed", n && n.done ? "true" : "false");
+    tick.title = n && n.done ? "done · tap to undo" : "done";
+    txt.title = n && n.t ? n.t : "";
+  }
+
+  // ---------- editing ----------
+  const txt = $("#txt");
+  txt.contentEditable = ce;
+  $(".line").addEventListener("mousedown", e => {        // the whole line is the click target, not just the words
+    if (e.target === txt) return; e.preventDefault(); txt.focus();
+    const r = document.createRange(); r.selectNodeContents(txt); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  });
+  let before = "";
+  txt.addEventListener("focus", () => { before = txt.textContent; });
+  txt.addEventListener("keydown", e => {
+    if (e.key === "Enter"){ e.preventDefault(); txt.blur(); }
+    if (e.key === "Escape"){ txt.textContent = before; txt.dataset.cancel = "1"; txt.blur(); }
+  });
+  txt.addEventListener("paste", e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " "); document.execCommand("insertText", false, t); });
+  txt.addEventListener("blur", () => {
+    if (txt.dataset.cancel){ delete txt.dataset.cancel; render(); return; }
+    const t = txt.textContent.replace(/\s+/g, " ").trim().slice(0, 160), day = cur.target;
+    if (t === before.trim()){ render(); return; }
+    save(day, m => {
+      const old = m[day] && typeof m[day] === "object" ? m[day] : {};
+      if (!t){ if (old.done) m[day] = Object.assign({}, old, {t: ""}); else delete m[day]; }
+      else m[day] = Object.assign({}, old, {t, done: old.t === t ? !!old.done : false, ts: Date.now()});
+    });
+    txt.classList.add("kept"); setTimeout(() => txt.classList.remove("kept"), 900);   // a soft underline blink: kept
+    render();
+  });
+  $("#tick").addEventListener("click", () => {
+    const day = cur.target;
+    save(day, m => { const o = m[day]; if (o && typeof o === "object") m[day] = Object.assign({}, o, {done: !o.done, ts: Date.now()}); });
+    render();
+  });
+
+  // ---------- live sync + time passing ----------
+  window.addEventListener("storage", e => { if (!DEMO && (e.key === KEY || e.key === null)) render(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+  setInterval(render, 30000);
+  render();
+})();
+</script>
+</body>
+</html>
