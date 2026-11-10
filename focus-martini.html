@@ -26,7 +26,15 @@ const CONFIG = {
   durations: [15, 25, 45],         // focus lengths in minutes (the presets)
   pick: 25,                        // preset selected at first
   breakMin: 5,                     // short break offered after a round
-  chime: true                      // soft chime when a round or break ends
+  chime: true,                     // soft chime when a round or break ends
+  nudges: [                        // gentle line under the time while a round runs, in order:
+    "settling in",                 //   0 – 10%
+    "finding your rhythm",         //  10 – 40%
+    "deep in it",                  //  40 – 75%
+    "almost there",                //  75 – 95%
+    "last little stretch"          //  last 5% or the final minute
+  ],
+  paused: "paused, take your time"
 };
 /* ====================================================================== */
 </script>
@@ -51,6 +59,8 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
 .lab{font:400 clamp(24px,4.6cqi,36px)/1.15 var(--serif);letter-spacing:-.012em;color:var(--ink);min-width:0;overflow-wrap:anywhere;padding:0 2px;margin-left:-2px}
 .idx{font:italic 400 clamp(14px,2cqi,16px)/1 var(--serif);color:var(--mute);white-space:nowrap;margin-right:34px}
 .idx b{font-style:normal;font-weight:600;color:var(--soft)}
+.task{display:inline-block;max-width:100%;font:italic 400 clamp(15px,2.4cqi,18px)/1.35 var(--serif);color:var(--soft);margin:6px 0 0 -2px;padding:0 2px;overflow-wrap:anywhere}
+.task:empty::before{color:var(--mute);opacity:.8}
 
 /* ---------- body: visual + time ---------- */
 .body{display:grid;grid-template-columns:1fr;justify-items:center;gap:clamp(10px,2.4cqi,18px);margin-top:clamp(14px,3cqi,22px)}
@@ -109,7 +119,8 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
 .cfg label{display:block;font:400 13.5px/1 var(--serif);color:var(--soft);margin:16px 0 7px}
 .cfg input[type=text]{width:100%;background:var(--panel);border:1px solid transparent;border-radius:10px;color:var(--ink);
   padding:9px 12px;font:400 15.5px/1.4 var(--serif);outline:none;transition:border-color .2s}
-.cfg input:focus{border-color:rgba(255,255,255,.25)}
+.cfg textarea{width:100%;min-height:128px;resize:vertical;background:var(--panel);border:1px solid transparent;border-radius:10px;color:var(--ink);padding:9px 12px;font:400 15.5px/1.4 var(--serif);outline:none;transition:border-color .2s}
+.cfg input:focus,.cfg textarea:focus{border-color:rgba(255,255,255,.25)}
 .foot{display:flex;gap:10px;align-items:center;margin-top:22px;flex-wrap:wrap}
 .foot .ghost{margin-left:auto}
 .hint{font:italic 400 14px/1.45 var(--serif);color:var(--mute);margin-top:12px}
@@ -130,6 +141,7 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
         <div class="lab" id="lab" contenteditable="plaintext-only" spellcheck="false" data-ph="focus"></div>
         <span class="idx" id="idx"></span>
       </div>
+      <div class="rise d1"><span class="task" id="task" contenteditable="plaintext-only" spellcheck="false" data-ph="what are you working on?" aria-label="what you're working on"></span></div>
       <div class="body">
         <div class="vis rise d2" id="vis" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
   <path id="liq" d="" fill="currentColor" fill-opacity=".38" stroke="none"/>
@@ -156,7 +168,7 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
 <script>
 (function(){
   "use strict";
-  const KEY = "chloe_focus_martini_v1", STATE = "chloe_focus_martini_state_v1", ROUNDS = "chloe_focus_rounds_v1";
+  const KEY = "chloe_focus_martini_v1", STATE = "chloe_focus_martini_state_v1", ROUNDS = "chloe_focus_rounds_v1", TASK = "chloe_focus_task_v1";  // task + rounds are shared by both focus widgets
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const clone = o => JSON.parse(JSON.stringify(o));
@@ -174,6 +186,10 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
     const s = Object.assign(clone(CONFIG), clone(saved));
     if (!Array.isArray(s.durations) || !s.durations.length) s.durations = clone(CONFIG.durations);
     s.breakMin = Math.max(1, +s.breakMin || CONFIG.breakMin);
+    const n = Array.isArray(s.nudges) ? s.nudges.slice(0, 5) : [];
+    while (n.length < 5) n.push(CONFIG.nudges[n.length]);
+    s.nudges = n;
+    if (typeof s.paused !== "string" || !s.paused) s.paused = CONFIG.paused;
     return s;
   }
   function set(patch){ Object.assign(saved, patch); write(KEY, saved); S = merge(); }
@@ -229,6 +245,12 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
   }
 
   // ---- render ----
+  // gentle nudge by progress through the round (p = share elapsed, L = seconds left)
+  function nudge(p, L){
+    const N = S.nudges;
+    if (p >= .95 || L <= 60) return N[4];
+    return p < .1 ? N[0] : p < .4 ? N[1] : p < .75 ? N[2] : N[3];
+  }
   const put = (el, t) => { if (document.activeElement !== el && el.textContent !== t) el.textContent = t; };
   let ctlKey = "";
   function render(force){
@@ -250,7 +272,9 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
       m === "idle"  ? "pick a little focus time" :
       m === "bdone" ? "break's over. ready when you are." :
       m === "done"  ? "lovely focus. take a breath?" :
-      (st.ph === "break" ? "breathing space · " : "") + (m === "pause" ? "paused · " : "") + rem;
+      m === "pause" ? S.paused :
+      st.ph === "break" ? "breathing space · " + rem :
+      nudge(1 - L / (st.total || 1), L);
 
     const n = roundsToday();
     $("#idx").innerHTML = n ? "<b>" + n + "</b> " + (n === 1 ? "round" : "rounds") + " today" : "no rounds yet today";
@@ -286,6 +310,18 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
     render(true);
   });
 
+  // ---- what you're working on (kept after a round; empty the field to clear) ----
+  const task = $("#task");
+  const readTask = () => { try { return localStorage.getItem(TASK) || ""; } catch (e) { return ""; } };
+  task.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); task.blur(); } if (e.key === "Escape"){ task.dataset.cancel = "1"; task.blur(); } });
+  task.addEventListener("paste", e => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " ")); });
+  task.addEventListener("blur", () => {
+    if (task.dataset.cancel){ delete task.dataset.cancel; task.textContent = readTask(); return; }
+    const t = task.textContent.replace(/\s+/g, " ").trim().slice(0, 120);
+    try { t ? localStorage.setItem(TASK, t) : localStorage.removeItem(TASK); } catch (e) {}
+    task.textContent = t;
+  });
+
   // ---- settings ----
   const seg = (k, v, opts) => '<div class="seg" data-k="' + k + '">' + opts.map(([o, l]) => '<button type="button" class="' + (String(v) === o ? "on" : "") + '" data-v="' + o + '">' + l + "</button>").join("") + "</div>";
   function openCfg(){
@@ -296,7 +332,9 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
       '<label for="c-d">focus lengths — minutes, comma separated</label><input id="c-d" type="text" value="' + esc(S.durations.join(", ")) + '">' +
       '</div><div><label for="c-b">short break — minutes</label><input id="c-b" type="text" inputmode="numeric" value="' + esc(S.breakMin) + '">' +
       "<label>chime at the end</label>" + seg("chime", S.chime, [["true", "on"], ["false", "mute"]]) +
-      '<div class="hint">tip — click the label to rename it. a running timer keeps going if you close the page. saved in this browser only.</div></div></div>' +
+      '<label for="c-p">while paused</label><input id="c-p" type="text" maxlength="60" value="' + esc(S.paused) + '">' +
+      '</div></div><label for="c-n">gentle nudges — one per line: start, 10%, 40%, 75%, last stretch</label><textarea id="c-n" rows="5">' + esc(S.nudges.join("\n")) + "</textarea><div><div>" +
+      '<div class="hint">tip — click the label to rename it, or the line under it to note what you’re on (empty it to clear). a running timer keeps going if you close the page. saved in this browser only.</div></div></div>' +
       '<div class="foot"><button class="btn solid" id="c-save">save</button><button class="btn" id="c-cancel">cancel</button>' +
       '<button class="ghost" id="c-reset">reset to defaults</button></div>';
     const tmp = {chime: String(S.chime)};
@@ -306,7 +344,9 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
     $("#c-save").onclick = () => {
       const d = [...new Set($("#c-d").value.split(/[,\s]+/).map(Number).filter(n => n > 0 && n <= 240).map(n => Math.round(n * 10) / 10))].slice(0, 5);
       set({label: $("#c-l").value.trim() || CONFIG.label, durations: d.length ? d : clone(CONFIG.durations),
-        breakMin: Math.min(60, Math.max(1, +$("#c-b").value || CONFIG.breakMin)), chime: tmp.chime === "true"});
+        breakMin: Math.min(60, Math.max(1, +$("#c-b").value || CONFIG.breakMin)), chime: tmp.chime === "true",
+        paused: $("#c-p").value.trim() || CONFIG.paused,
+        nudges: $("#c-n").value.split("\n").map(x => x.trim()).filter(Boolean).slice(0, 5)});
       if (tmp.chime === "true") audio();
       closeCfg();
     };
@@ -326,9 +366,11 @@ body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothi
     if (e.key === KEY){ saved = read(KEY); S = merge(); render(true); }
     if (e.key === STATE){ st = Object.assign({mode: "idle", ph: "focus"}, read(STATE)); render(true); }
     if (e.key === ROUNDS) render();
+    if (e.key === TASK && document.activeElement !== task) task.textContent = readTask();
   });
   document.addEventListener("visibilitychange", () => render());
   visInit();
+  task.textContent = readTask();
   render(true);
   setInterval(render, 250);
 })();
