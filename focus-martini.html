@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>focus — martini</title>
+<!--
+  chloe-focus-martini.html — minimal monochrome focus timer for Notion /embed (companion to chloe-hello.html)
+  A martini drains as the round runs; at zero the olive drops in. A break slowly refills the glass.
+  Pick a length, begin, pause / resume, stop. After a round it offers a short break. Soft chime at the end (mute in settings).
+  The timer runs on timestamps, so it stays accurate in background tabs and keeps going across reloads.
+  Fonts: Lyon Text if installed (Notion's serif), otherwise Source Serif 4 from Google Fonts.
+  No tracking, no other scripts. Click the label to edit; ••• (on hover) for settings. Saved in this browser only (localStorage).
+  Debug: add ?speed=60 to the URL to run time 60× faster.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&display=swap" rel="stylesheet">
+<script>
+/* ======================================================================
+   CONFIG — defaults. Changes made in the widget override these
+   (in this browser) until you press Reset.
+   ====================================================================== */
+const CONFIG = {
+  label: "focus",
+  durations: [15, 25, 45],         // focus lengths in minutes (the presets)
+  pick: 25,                        // preset selected at first
+  breakMin: 5,                     // short break offered after a round
+  chime: true,                     // soft chime when a round or break ends
+  nudges: [                        // gentle line under the time while a round runs, in order:
+    "settling in",                 //   0 – 10%
+    "finding your rhythm",         //  10 – 40%
+    "deep in it",                  //  40 – 75%
+    "almost there",                //  75 – 95%
+    "last little stretch"          //  last 5% or the final minute
+  ],
+  paused: "paused, take your time"
+};
+/* ====================================================================== */
+</script>
+<style>
+:root{
+  --ink:#f2f2f2; --soft:rgba(242,242,242,.62); --mute:rgba(242,242,242,.4); --hair:rgba(255,255,255,.08);
+  --card:#161616; --panel:#202020;
+  --serif:"Lyon-Text","Lyon Text","Source Serif 4",Georgia,ui-serif,serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:transparent}
+body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+[hidden]{display:none!important}
+
+/* ---------- card: flat, hairline only ---------- */
+.card{position:relative;max-width:390px;margin:0 auto;border-radius:20px;background:var(--card);border:1px solid var(--hair);container-type:inline-size}
+.pad{padding:clamp(20px,4.6cqi,38px) clamp(22px,5.6cqi,48px) clamp(20px,4.6cqi,38px)}
+
+/* ---------- top ---------- */
+.mast{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+.lab{font:400 clamp(24px,4.6cqi,36px)/1.15 var(--serif);letter-spacing:-.012em;color:var(--ink);min-width:0;overflow-wrap:anywhere;padding:0 2px;margin-left:-2px}
+.idx{font:italic 400 clamp(14px,2cqi,16px)/1 var(--serif);color:var(--mute);white-space:nowrap;margin-right:34px}
+.idx b{font-style:normal;font-weight:600;color:var(--soft)}
+.task{display:inline-block;max-width:100%;font:italic 400 clamp(15px,2.4cqi,18px)/1.35 var(--serif);color:var(--soft);margin:6px 0 0 -2px;padding:0 2px;overflow-wrap:anywhere}
+.task:empty::before{color:var(--mute);opacity:.8}
+
+/* ---------- body: visual + time ---------- */
+.body{display:grid;grid-template-columns:1fr;justify-items:center;gap:clamp(10px,2.4cqi,18px);margin-top:clamp(14px,3cqi,22px)}
+.vis{width:clamp(150px,52cqi,200px);aspect-ratio:1;color:var(--soft)}
+.vis svg{width:100%;height:100%;display:block;overflow:visible}
+.side{display:flex;flex-direction:column;align-items:center;min-width:0}
+.time{display:flex;align-items:flex-start;font:500 clamp(58px,17cqi,104px)/.9 var(--serif);font-optical-sizing:auto;letter-spacing:-.025em;
+  font-variant-numeric:lining-nums tabular-nums;white-space:nowrap}
+.time .c{color:var(--mute);margin:0 .01em}
+.run .time .c{animation:breathe 2s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.3}}
+.status{font:italic 400 clamp(14px,2.3cqi,17px)/1.4 var(--serif);color:var(--soft);margin-top:clamp(10px,2cqi,14px);text-align:center;min-height:1.4em}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin-top:clamp(14px,2.8cqi,20px)}
+
+
+/* ---------- click-to-edit (invisible until hover) ---------- */
+[contenteditable]{outline:none;border-radius:6px;cursor:text;transition:background .2s}
+[contenteditable]:hover{background:rgba(255,255,255,.045)}
+[contenteditable]:focus{background:rgba(255,255,255,.07)}
+[contenteditable]:empty::before{content:attr(data-ph);opacity:.45}
+
+.menu{position:absolute;top:clamp(14px,3.6cqi,30px);right:clamp(14px,3.6cqi,30px);z-index:3;border:1px solid transparent;background:transparent;color:var(--mute);
+  width:30px;height:22px;border-radius:11px;font:600 12px/1 system-ui,sans-serif;letter-spacing:1px;cursor:pointer;opacity:0;transition:color .2s,border-color .2s,opacity .25s}
+.card:hover .menu,.menu.on,.menu:focus-visible{opacity:1}
+@media (hover:none){.menu{opacity:.55}}
+.menu:hover,.menu.on{color:var(--ink);border-color:var(--hair)}
+.menu:focus-visible{border-color:rgba(255,255,255,.3);outline:none}
+
+/* ---------- entrance ---------- */
+.rise{opacity:0;transform:translateY(6px);animation:rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.35s}
+@keyframes rise{to{opacity:1;transform:none}}
+
+/* ---------- buttons (same as hello settings) ---------- */
+.seg{display:inline-flex;background:var(--panel);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--soft);font:400 14px/1 var(--serif);padding:8px 13px;border-radius:999px;cursor:pointer;transition:background .2s,color .2s}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#161616}
+.btn{border:1px solid rgba(255,255,255,.14);background:transparent;color:var(--ink);font:400 14.5px/1 var(--serif);padding:10px 18px;border-radius:999px;cursor:pointer;transition:border-color .2s,background .2s}
+.btn:hover{border-color:rgba(255,255,255,.35)}
+.btn.solid{background:var(--ink);border-color:var(--ink);color:#161616}
+.btn.solid:hover{background:#fff}
+.ghost{border:0;background:none;color:var(--mute);font:italic 400 14.5px var(--serif);cursor:pointer;padding:6px 4px}
+.ghost:hover{color:var(--ink)}
+
+/* ---------- settings ---------- */
+.cfg .title{font:400 clamp(24px,4cqi,30px)/1.1 var(--serif);letter-spacing:-.012em;margin:0 0 4px}
+.cfg .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 30px}
+@container (max-width:540px){.cfg .grid{grid-template-columns:1fr}}
+.cfg label{display:block;font:400 13.5px/1 var(--serif);color:var(--soft);margin:16px 0 7px}
+.cfg input[type=text]{width:100%;background:var(--panel);border:1px solid transparent;border-radius:10px;color:var(--ink);
+  padding:9px 12px;font:400 15.5px/1.4 var(--serif);outline:none;transition:border-color .2s}
+.cfg textarea{width:100%;min-height:128px;resize:vertical;background:var(--panel);border:1px solid transparent;border-radius:10px;color:var(--ink);padding:9px 12px;font:400 15.5px/1.4 var(--serif);outline:none;transition:border-color .2s}
+.cfg input:focus,.cfg textarea:focus{border-color:rgba(255,255,255,.25)}
+.foot{display:flex;gap:10px;align-items:center;margin-top:22px;flex-wrap:wrap}
+.foot .ghost{margin-left:auto}
+.hint{font:italic 400 14px/1.45 var(--serif);color:var(--mute);margin-top:12px}
+
+@media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}.run .time .c{animation:none}}
+.olive{transform-box:view-box;transform-origin:0 0;transform:translate(86px,22px) rotate(62deg);transition:transform .6s ease}
+.olive.in{transform:translate(61px,74px) rotate(-6deg);transition:transform 1.1s cubic-bezier(.55,0,.55,1.25)}
+#liq,#surf{transition:d .3s linear}
+
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <button class="menu" id="menu" aria-label="Settings" title="settings">•••</button>
+  <div class="pad">
+    <div id="view">
+      <div class="mast rise d1">
+        <div class="lab" id="lab" contenteditable="plaintext-only" spellcheck="false" data-ph="focus"></div>
+        <span class="idx" id="idx"></span>
+      </div>
+      <div class="rise d1"><span class="task" id="task" contenteditable="plaintext-only" spellcheck="false" data-ph="what are you working on?" aria-label="what you're working on"></span></div>
+      <div class="body">
+        <div class="vis rise d2" id="vis" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+  <path id="liq" d="" fill="currentColor" fill-opacity=".38" stroke="none"/>
+  <path id="surf" d="" opacity=".6" stroke-width="1"/>
+  <g class="olive" id="olive">
+    <path d="M-11 -29 L4 5"/>
+    <circle cx="0" cy="0" r="5.6" fill="var(--card)" style="color:var(--ink)"/>
+    <circle cx="1.6" cy="-1.4" r="1.6" fill="currentColor" fill-opacity=".55" stroke="none"/>
+  </g>
+  <path d="M14 36 H106 L60 84 Z"/>
+  <path d="M60 84 V110 M43 110 H77"/>
+</svg></div>
+        <div class="side rise d3">
+          <div class="time" id="time" aria-live="off"><span id="mm"></span><span class="c">:</span><span id="ss"></span></div>
+          <div class="status" id="status" aria-live="polite"></div>
+          <div class="ctl" id="ctl"></div>
+        </div>
+      </div>
+    </div>
+    <div class="cfg" id="cfg" hidden></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const KEY = "chloe_focus_martini_v1", STATE = "chloe_focus_martini_state_v1", ROUNDS = "chloe_focus_rounds_v1", TASK = "chloe_focus_task_v1";  // task + rounds are shared by both focus widgets
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+  // ---- time source (?speed=N runs N× faster, for testing) ----
+  const SPEED = Math.max(1, Math.min(3600, +new URLSearchParams(location.search).get("speed") || 1));
+  const T0 = Date.now();
+  const now = () => SPEED === 1 ? Date.now() : T0 + (Date.now() - T0) * SPEED;
+
+  // ---- settings ----
+  let saved = read(KEY), S = merge();
+  function merge(){
+    const s = Object.assign(clone(CONFIG), clone(saved));
+    if (!Array.isArray(s.durations) || !s.durations.length) s.durations = clone(CONFIG.durations);
+    s.breakMin = Math.max(1, +s.breakMin || CONFIG.breakMin);
+    const n = Array.isArray(s.nudges) ? s.nudges.slice(0, 5) : [];
+    while (n.length < 5) n.push(CONFIG.nudges[n.length]);
+    s.nudges = n;
+    if (typeof s.paused !== "string" || !s.paused) s.paused = CONFIG.paused;
+    return s;
+  }
+  function set(patch){ Object.assign(saved, patch); write(KEY, saved); S = merge(); }
+
+  // ---- session state: mode idle | run | pause | done | bdone ; phase focus | break ----
+  let st = Object.assign({mode: "idle", ph: "focus", sel: null, total: 0, end: 0, left: 0}, read(STATE));
+  const save = () => write(STATE, st);
+  const sel = () => S.durations.includes(st.sel) ? st.sel : (S.durations.includes(S.pick) ? S.pick : S.durations[Math.min(1, S.durations.length - 1)]);
+  const left = () => st.mode === "run" ? Math.max(0, (st.end - now()) / 1000) : st.mode === "pause" ? st.left : 0;
+
+  const dayKey = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  function roundsToday(){ return read(ROUNDS)[dayKey(new Date())] || 0; }
+  function addRound(){
+    const r = read(ROUNDS), k = dayKey(new Date()); r[k] = (r[k] || 0) + 1;
+    Object.keys(r).sort().slice(0, -60).forEach(x => delete r[x]);
+    write(ROUNDS, r);
+  }
+
+  // ---- soft chime (WebAudio, unlocked on first tap) ----
+  let AC = null;
+  function audio(){ try { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === "suspended") AC.resume(); return AC; } catch (e) { return null; } }
+  function chime(){
+    if (!S.chime) return; const a = audio(); if (!a) return; const t = a.currentTime;
+    [[659.25, 0], [783.99, .22], [987.77, .44], [1318.5, .7]].forEach(([f, d]) => {
+      const o = a.createOscillator(), g = a.createGain(); o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(.09, t + d + .02); g.gain.exponentialRampToValueAtTime(.0001, t + d + 1.8);
+      o.connect(g).connect(a.destination); o.start(t + d); o.stop(t + d + 1.9);
+    });
+  }
+
+  // ---- actions ----
+  function start(min, ph){ audio(); st.ph = ph; st.total = min * 60; st.end = now() + st.total * 1000; st.mode = "run"; save(); render(true); }
+  const act = {
+    begin:  () => start(sel(), "focus"),
+    pause:  () => { st.left = left(); st.mode = "pause"; save(); render(true); },
+    resume: () => { audio(); st.end = now() + st.left * 1000; st.mode = "run"; save(); render(true); },
+    stop:   () => { st.mode = "idle"; st.ph = "focus"; save(); render(true); },
+    brk:    () => start(S.breakMin, "break"),
+    again:  () => start(sel(), "focus"),
+    finish: () => { st.mode = "idle"; st.ph = "focus"; save(); render(true); }
+  };
+
+  // ---- visual ----
+  // martini: the drink drains as the round runs (area-true, follows the V); at zero the olive drops in. a break slowly refills it.
+  const TOP = 39, TIP_Y = 82, CX = 60, SLOPE = 46 / 48;
+  function visInit(){}
+  function visUpdate(p, m, ph){
+    const fill = (m === "done") ? 0 : (ph === "break" && (m === "run" || m === "pause")) ? p : (m === "run" || m === "pause") ? 1 - p : 1;
+    const h = Math.sqrt(Math.max(0, fill)) * (TIP_Y - TOP), y = TIP_Y - h, w = Math.max(0, (84 - y) * SLOPE - 2.2);
+    $("#liq").setAttribute("d", h > .4 ? "M" + (CX - w).toFixed(2) + " " + y.toFixed(2) + " L" + (CX + w).toFixed(2) + " " + y.toFixed(2) + " L" + CX + " " + TIP_Y + " Z" : "");
+    $("#surf").setAttribute("d", h > 1.5 ? "M" + (CX - w + 2).toFixed(2) + " " + y.toFixed(2) + " H" + (CX + w - 2).toFixed(2) : "");
+    $("#olive").classList.toggle("in", m === "done");
+  }
+
+  // ---- render ----
+  // gentle nudge by progress through the round (p = share elapsed, L = seconds left)
+  function nudge(p, L){
+    const N = S.nudges;
+    if (p >= .95 || L <= 60) return N[4];
+    return p < .1 ? N[0] : p < .4 ? N[1] : p < .75 ? N[2] : N[3];
+  }
+  const put = (el, t) => { if (document.activeElement !== el && el.textContent !== t) el.textContent = t; };
+  let ctlKey = "";
+  function render(force){
+    // a round (or break) that ended while we weren't looking
+    if (st.mode === "run" && now() >= st.end){
+      const late = now() - st.end;
+      st.mode = st.ph === "focus" ? "done" : "bdone"; st.left = 0;
+      if (st.ph === "focus") addRound();
+      save(); if (late < 60000 * SPEED) chime();
+    }
+    const L = left(), m = st.mode;
+    let secs = m === "run" || m === "pause" ? Math.ceil(L - 1e-6) : m === "done" ? 0 : sel() * 60;
+    $("#mm").textContent = String(Math.floor(secs / 60)).padStart(2, "0");
+    $("#ss").textContent = String(secs % 60).padStart(2, "0");
+    $("#card").classList.toggle("run", m === "run");
+
+    const mins = Math.ceil(L / 60), rem = L > 60 ? mins + " min left" : Math.ceil(L) + " sec left";
+    $("#status").textContent =
+      m === "idle"  ? "pick a little focus time" :
+      m === "bdone" ? "break's over. ready when you are." :
+      m === "done"  ? "lovely focus. take a breath?" :
+      m === "pause" ? S.paused :
+      st.ph === "break" ? "breathing space · " + rem :
+      nudge(1 - L / (st.total || 1), L);
+
+    const n = roundsToday();
+    $("#idx").innerHTML = n ? "<b>" + n + "</b> " + (n === 1 ? "round" : "rounds") + " today" : "no rounds yet today";
+    put($("#lab"), st.ph === "break" && (m === "run" || m === "pause") ? "break" : S.label);
+
+    // controls (only rebuilt when they change, so clicks never land on a stale button)
+    const k = m + "|" + sel() + "|" + S.durations.join(",") + "|" + S.breakMin;
+    if (force || k !== ctlKey){
+      ctlKey = k; const c = $("#ctl");
+      if (m === "idle" || m === "bdone")
+        c.innerHTML = '<div class="seg" role="radiogroup">' + S.durations.map(d => '<button type="button" data-sel="' + d + '" class="' + (d === sel() ? "on" : "") + '">' + d + " min</button>").join("") + '</div><button class="btn solid" data-a="begin">begin</button>';
+      else if (m === "run")   c.innerHTML = '<button class="btn" data-a="pause">pause</button><button class="btn" data-a="stop">stop</button>';
+      else if (m === "pause") c.innerHTML = '<button class="btn solid" data-a="resume">resume</button><button class="btn" data-a="stop">stop</button>';
+      else if (m === "done")  c.innerHTML = '<button class="btn solid" data-a="brk">' + S.breakMin + ' min break</button><button class="btn" data-a="again">another round</button><button class="ghost" data-a="finish">finish</button>';
+    }
+    const total = st.total || 1;
+    const p = m === "run" || m === "pause" ? Math.min(1, Math.max(0, 1 - L / total)) : m === "done" ? 1 : 0;
+    visUpdate(p, m, st.ph);
+  }
+  $("#ctl").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.sel){ st.sel = +b.dataset.sel; if (st.mode === "bdone") st.mode = "idle"; save(); render(true); }
+    else if (act[b.dataset.a]) act[b.dataset.a]();
+  });
+
+  // ---- click-to-edit label ----
+  const lab = $("#lab");
+  lab.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); lab.blur(); } if (e.key === "Escape"){ lab.dataset.cancel = "1"; lab.blur(); } });
+  lab.addEventListener("paste", e => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " ")); });
+  lab.addEventListener("blur", () => {
+    if (lab.dataset.cancel){ delete lab.dataset.cancel; lab.textContent = ""; }
+    else if (!(st.ph === "break" && (st.mode === "run" || st.mode === "pause"))) set({label: lab.textContent.replace(/\s+/g, " ").trim() || CONFIG.label});
+    render(true);
+  });
+
+  // ---- what you're working on (kept after a round; empty the field to clear) ----
+  const task = $("#task");
+  const readTask = () => { try { return localStorage.getItem(TASK) || ""; } catch (e) { return ""; } };
+  task.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); task.blur(); } if (e.key === "Escape"){ task.dataset.cancel = "1"; task.blur(); } });
+  task.addEventListener("paste", e => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " ")); });
+  task.addEventListener("blur", () => {
+    if (task.dataset.cancel){ delete task.dataset.cancel; task.textContent = readTask(); return; }
+    const t = task.textContent.replace(/\s+/g, " ").trim().slice(0, 120);
+    try { t ? localStorage.setItem(TASK, t) : localStorage.removeItem(TASK); } catch (e) {}
+    task.textContent = t;
+  });
+
+  // ---- settings ----
+  const seg = (k, v, opts) => '<div class="seg" data-k="' + k + '">' + opts.map(([o, l]) => '<button type="button" class="' + (String(v) === o ? "on" : "") + '" data-v="' + o + '">' + l + "</button>").join("") + "</div>";
+  function openCfg(){
+    const p = $("#cfg");
+    if (!p.hidden){ closeCfg(); return; }
+    p.innerHTML = '<div class="title">make it yours</div><div class="grid"><div>' +
+      '<label for="c-l">label</label><input id="c-l" type="text" maxlength="40" value="' + esc(S.label) + '">' +
+      '<label for="c-d">focus lengths — minutes, comma separated</label><input id="c-d" type="text" value="' + esc(S.durations.join(", ")) + '">' +
+      '</div><div><label for="c-b">short break — minutes</label><input id="c-b" type="text" inputmode="numeric" value="' + esc(S.breakMin) + '">' +
+      "<label>chime at the end</label>" + seg("chime", S.chime, [["true", "on"], ["false", "mute"]]) +
+      '<label for="c-p">while paused</label><input id="c-p" type="text" maxlength="60" value="' + esc(S.paused) + '">' +
+      '</div></div><label for="c-n">gentle nudges — one per line: start, 10%, 40%, 75%, last stretch</label><textarea id="c-n" rows="5">' + esc(S.nudges.join("\n")) + "</textarea><div><div>" +
+      '<div class="hint">tip — click the label to rename it, or the line under it to note what you’re on (empty it to clear). a running timer keeps going if you close the page. saved in this browser only.</div></div></div>' +
+      '<div class="foot"><button class="btn solid" id="c-save">save</button><button class="btn" id="c-cancel">cancel</button>' +
+      '<button class="ghost" id="c-reset">reset to defaults</button></div>';
+    const tmp = {chime: String(S.chime)};
+    p.querySelectorAll(".seg").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => {
+      tmp[sg.dataset.k] = b.dataset.v; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    }));
+    $("#c-save").onclick = () => {
+      const d = [...new Set($("#c-d").value.split(/[,\s]+/).map(Number).filter(n => n > 0 && n <= 240).map(n => Math.round(n * 10) / 10))].slice(0, 5);
+      set({label: $("#c-l").value.trim() || CONFIG.label, durations: d.length ? d : clone(CONFIG.durations),
+        breakMin: Math.min(60, Math.max(1, +$("#c-b").value || CONFIG.breakMin)), chime: tmp.chime === "true",
+        paused: $("#c-p").value.trim() || CONFIG.paused,
+        nudges: $("#c-n").value.split("\n").map(x => x.trim()).filter(Boolean).slice(0, 5)});
+      if (tmp.chime === "true") audio();
+      closeCfg();
+    };
+    $("#c-cancel").onclick = closeCfg;
+    let armed = false;
+    $("#c-reset").onclick = e => {
+      if (!armed){ armed = true; e.target.textContent = "tap again to reset"; setTimeout(() => { armed = false; if (e.target.isConnected) e.target.textContent = "reset to defaults"; }, 2500); return; }
+      try { localStorage.removeItem(KEY); } catch (err) {}   // settings only — a running timer and today's rounds are kept
+      saved = {}; S = merge(); closeCfg();
+    };
+    $("#view").hidden = true; p.hidden = false; $("#menu").classList.add("on");
+  }
+  function closeCfg(){ $("#cfg").hidden = true; $("#cfg").innerHTML = ""; $("#view").hidden = false; $("#menu").classList.remove("on"); render(true); }
+  $("#menu").addEventListener("click", openCfg);
+
+  window.addEventListener("storage", e => {
+    if (e.key === KEY){ saved = read(KEY); S = merge(); render(true); }
+    if (e.key === STATE){ st = Object.assign({mode: "idle", ph: "focus"}, read(STATE)); render(true); }
+    if (e.key === ROUNDS) render();
+    if (e.key === TASK && document.activeElement !== task) task.textContent = readTask();
+  });
+  document.addEventListener("visibilitychange", () => render());
+  visInit();
+  task.textContent = readTask();
+  render(true);
+  setInterval(render, 250);
+})();
+</script>
+</body>
+</html>
