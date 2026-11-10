@@ -6,7 +6,7 @@
 <title>on the record</title>
 <!--
   chloe-good-record.html — "on the record": small good moments kept as tracks, for Notion /embed
-  Each moment is a track. This week is side a, last week side b, older weeks fold away. Tap the record to play an old one.
+  Each moment is a track; no tracklist. Tap the record and one random track pops up under it while it spins.
   Shares its log with chloe-matchbook.html: localStorage "chloe_good_things_v1" = [{ id, t, d: "yyyy-mm-dd", ts }].
   Imports the old glimmers jar once. Reset only changes settings, never your moments. ?demo=1 shows sample tracks without saving anything.
   Fonts: Lyon Text if installed (Notion's serif), otherwise Source Serif 4 from Google Fonts. No tracking, no other scripts.
@@ -89,29 +89,21 @@ svg text{font-family:var(--serif)}
 .disc{transform-box:view-box;transform-origin:158px 75px}
 .playing .disc{animation:spin 5s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.side{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:14px;padding-bottom:6px;border-bottom:1px solid var(--hair)}
-.side .s{font:italic 400 13px/1 var(--serif);color:var(--mute)}
-.side .w{font:400 12.5px/1 var(--serif);color:var(--mute);white-space:nowrap}
-.side .np{font:italic 400 12.5px/1 var(--serif);color:var(--soft);white-space:nowrap}
-.tr{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:baseline;padding:7px 10px;margin:0 -10px;border-radius:10px;font:400 14.5px/1.3 var(--serif);cursor:pointer;transition:background .25s}
-.tr:hover{background:rgba(255,255,255,.03)}
-.tr .n{font:400 12.5px/1 var(--serif);color:var(--mute);font-variant-numeric:tabular-nums}
-.tr .t{overflow-wrap:anywhere}
-.tr .d{font:italic 400 12.5px/1 var(--serif);color:var(--mute);white-space:nowrap}
-.tr.old{color:var(--soft)}
-.tr.older{color:var(--mute)}
-.tr.play{background:var(--panel)}
-.tr.play .t{font-style:italic;color:var(--ink)}
-.tr.sel{background:var(--panel)}
-.tr.new{animation:slide .55s cubic-bezier(.2,.7,.2,1)}
-@keyframes slide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-.empty{font:italic 400 14px/1.4 var(--serif);color:var(--mute);padding:8px 0 2px}
-.more{border:0;background:none;color:var(--mute);font:italic 400 12.5px/1 var(--serif);cursor:pointer;padding:8px 0 2px}
-.more:hover{color:var(--ink)}
-.wkh{font:italic 400 12px/1 var(--serif);color:var(--mute);margin:10px 0 2px}
-.note{font:italic 400 13.5px/1.4 var(--serif);color:var(--mute);text-align:center;margin-top:8px}
-.note:empty{display:none}
-@media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}.playing .disc,.tr.new,.memo{animation:none}}
+.slot{position:relative;min-height:104px;margin-top:10px;display:flex;flex-direction:column;justify-content:center}
+.idle{font:italic 400 13.5px/1.4 var(--serif);color:var(--mute);text-align:center;opacity:.8;animation:fade .6s ease both}
+.pop{padding:12px 14px 10px;background:var(--panel);border-radius:12px;animation:popin .5s cubic-bezier(.2,.7,.2,1) both}
+.pop.out{animation:popout .45s ease both}
+@keyframes popin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes popout{from{opacity:1}to{opacity:0;transform:translateY(3px)}}
+.pop .np{font:400 12.5px/1 var(--serif);color:var(--mute)}
+.pop .np i{color:var(--soft)}
+.pop .q{font:italic 400 15.5px/1.4 var(--serif);color:var(--ink);margin-top:8px;overflow-wrap:anywhere}
+.pop .m{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:8px}
+.pop .when{font:400 12.5px/1 var(--serif);color:var(--mute)}
+.pop.msg .q{color:var(--mute);margin-top:0;text-align:center}
+.tk-new{animation:tick 1.6s ease both}
+@keyframes tick{0%{opacity:0;stroke-width:2.4}30%{opacity:1;stroke-width:2.4}100%{opacity:1;stroke-width:1.2}}
+@media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}.playing .disc,.pop,.pop.out,.idle,.tk-new{animation:none}}
 </style>
 </head>
 <body>
@@ -124,8 +116,7 @@ svg text{font-family:var(--serif)}
         <span class="idx" id="idx"></span>
       </div>
       <button class="vis rise d2" id="rec" type="button" aria-label="play an old track" title="play an old one"></button>
-      <div class="note" id="note" aria-live="polite"></div>
-      <div id="list" class="rise d3"></div>
+      <div class="slot rise d3" id="slot" aria-live="polite"></div>
       <form class="add rise d4" id="add" autocomplete="off"><input id="tx" type="text" maxlength="140" aria-label="a small good thing"><button type="submit">keep</button></form>
     </div>
     <div class="cfg" id="cfg" hidden></div>
@@ -134,7 +125,7 @@ svg text{font-family:var(--serif)}
 <script>
 (function(){
   "use strict";
-  const CFGKEY = "chloe_good_record_cfg_v1", CFGHINT = "tap the record to play an old track; tap a track to let it go.";
+  const CFGKEY = "chloe_good_record_cfg_v1", CFGHINT = "tap the record to play an old track; let it go from its card.";
   // ======================= shared "good things" core (same in both widgets) =======================
   const LOG = "chloe_good_things_v1", MIGRATED = "chloe_good_things_migrated_v1", GLIMMERS = "chloe_glimmers_v1", MAX = 1000;
   const DEMO = new URLSearchParams(location.search).get("demo") === "1";
@@ -270,13 +261,14 @@ svg text{font-family:var(--serif)}
 
 
   // ---------------------------- record ----------------------------
-  let playing = null, playTimer = null, lastPlayed = null, sel = null, freshId = null, showAllA = false, showAllB = false, showOlder = false;
+  // no tracklist: tap the record and one track pops up under it.
+  let pop = null, popTimer = null, lastPlayed = null, freshTick = false;   // pop = {kind:"play"|"kept"|"msg", id?, text?}
 
   function recordSVG(n, now){
     let ticks = "";
     for (let i = 0; i < Math.min(n, 140); i++){             // one groove tick per track, spread round the edge
       const a = (i * 137.508 - 90) * Math.PI / 180, r1 = i < 70 ? 59.5 : 54.5, r2 = r1 + 4;
-      ticks += '<path d="M' + (158 + r1 * Math.cos(a)).toFixed(2) + " " + (75 + r1 * Math.sin(a)).toFixed(2) + " L" + (158 + r2 * Math.cos(a)).toFixed(2) + " " + (75 + r2 * Math.sin(a)).toFixed(2) + '"/>';
+      ticks += '<path' + (freshTick && i === n - 1 ? ' class="tk-new"' : "") + ' d="M' + (158 + r1 * Math.cos(a)).toFixed(2) + " " + (75 + r1 * Math.sin(a)).toFixed(2) + " L" + (158 + r2 * Math.cos(a)).toFixed(2) + " " + (75 + r2 * Math.sin(a)).toFixed(2) + '"/>';
     }
     const month = now.toLocaleDateString("en-US", {month: "long"}).toLowerCase();
     return '<svg viewBox="0 0 250 150" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -289,98 +281,70 @@ svg text{font-family:var(--serif)}
       '<text x="38" y="38" font-size="12" fill="currentColor" stroke="none" style="color:var(--ink)">good things</text>' +
       '<text x="38" y="52" font-size="8.5" font-style="italic" fill="currentColor" stroke="none" opacity=".6">vol. ' + isoWeek(now) + " · " + esc(month) + "</text>" +
       '<path d="M38 104 H134" opacity=".22"/>' +
-      '<text x="38" y="116" font-size="7.5" font-style="italic" fill="currentColor" stroke="none" opacity=".45">' + n + (n === 1 ? " track" : " tracks") + " · side a / b</text></svg>";
+      '<text x="38" y="116" font-size="7.5" font-style="italic" fill="currentColor" stroke="none" opacity=".45">' + n + (n === 1 ? " track" : " tracks") + "</text></svg>";
   }
 
-  const wd = k => parseDay(k).toLocaleDateString("en-US", {weekday: "short"}).toLowerCase();
-  function row(g, num, cls){
-    const isSel = sel === g.id, isPlay = playing === g.id;
-    return '<div class="tr ' + cls + (isPlay ? " play" : "") + (isSel ? " sel" : "") + (g.id === freshId ? " new" : "") + '" data-id="' + esc(g.id) + '" title="' + esc(g.d) + '">' +
-      '<span class="n">' + String(num).padStart(2, "0") + '</span><span class="t">' + esc(g.t) + "</span>" +
-      (isSel ? '<button type="button" class="x" data-x="' + esc(g.id) + '">let it go</button>' : '<span class="d">' + esc(wd(g.d)) + "</span>") + "</div>";
+  const ordered = () => readLog().sort((a, b) => a.ts - b.ts);          // track 01 = the first thing ever kept
+  const num = (list, id) => String(list.findIndex(g => g.id === id) + 1).padStart(2, "0");
+  const longDay = k => parseDay(k).toLocaleDateString("en-US", {weekday: "long", month: "short", day: "numeric"}).toLowerCase();
+
+  let shownKey = "";
+  function renderPop(force){
+    const slot = $("#slot"), list = ordered();
+    if (pop && pop.id && !list.some(g => g.id === pop.id)) { pop = null; clearTimeout(popTimer); }   // removed elsewhere
+    const g = pop && pop.id ? list.find(x => x.id === pop.id) : null;
+    const key = pop ? pop.kind + ":" + (pop.id || pop.text) + ":" + (g ? g.t + num(list, g.id) : "") : "idle:" + list.length;
+    if (key === shownKey && !force) return;                   // leave it alone so the fade and two-tap survive re-renders
+    shownKey = key;
+    if (!pop){ slot.innerHTML = '<div class="idle">' + (list.length ? "tap the record to play one" : "keep a small good thing to start the record") + "</div>"; return; }
+    if (pop.kind === "msg"){ slot.innerHTML = '<div class="pop msg"><div class="q">' + esc(pop.text) + "</div></div>"; return; }
+    const head = pop.kind === "play" ? "now playing · <i>track " + num(list, g.id) + "</i>" : "kept · <i>track " + num(list, g.id) + "</i>";
+    slot.innerHTML = '<div class="pop" data-id="' + esc(g.id) + '"><div class="np">' + head + '</div><div class="q">“' + esc(g.t) + '”</div>' +
+      '<div class="m"><span class="when">' + esc(longDay(g.d)) + '</span><button type="button" class="x" id="letgo">let it go</button></div></div>';
+    twoTap($("#letgo"), "let it go", () => { const id = g.id; clearTimeout(popTimer); pop = null; removeEntry(id); render(); });
   }
 
   function render(){
-    const now = new Date(), list = readLog().sort((a, b) => b.ts - a.ts);   // newest first
-    const thisW = dayKey(weekStart(now)), lastW = dayKey(addDays(weekStart(now), -7));
-    const A = list.filter(g => weekKey(g.d) === thisW), B = list.filter(g => weekKey(g.d) === lastW), O = list.filter(g => weekKey(g.d) < lastW);
-    if (playing && !list.some(g => g.id === playing)) stop(true);
-    if (sel && !list.some(g => g.id === sel)) sel = null;
+    const now = new Date(), list = readLog();
     putLabel();
     $("#idx").innerHTML = "<b>" + list.length + "</b> " + (list.length === 1 ? "track" : "tracks") + (DEMO ? " · demo" : "");
-    const rec = $("#rec"); rec.innerHTML = recordSVG(list.length, now); rec.classList.toggle("playing", !!playing);
-
-    // auto-open the part of the list that holds the playing track
-    const CAPA = 6, CAPB = 3;
-    const openA = showAllA || (playing && A.findIndex(g => g.id === playing) >= CAPA);
-    const openB = showAllB || (playing && B.findIndex(g => g.id === playing) >= CAPB);
-    const openO = showOlder || (playing && O.some(g => g.id === playing));
-    const npNum = playing ? list.findIndex(g => g.id === playing) + 1 : 0;
-    const np = n => '<span class="np">now playing · ' + String(n).padStart(2, "0") + "</span>";
-    let n = 0, h = "";
-    h += '<div class="side"><span class="s">side a · this week</span>' + (playing && A.some(g => g.id === playing) ? np(npNum) : '<span class="w">' + A.length + (A.length === 1 ? " track" : " tracks") + "</span>") + "</div>";
-    if (!A.length) h += '<div class="empty">nothing on side a yet this week</div>';
-    else {
-      const shownA = openA ? A : A.slice(0, CAPA);
-      h += shownA.map(g => row(g, ++n, "")).join("");
-      n += A.length - shownA.length;
-      if (A.length > CAPA) h += '<button type="button" class="more" data-more="a">' + (openA ? "show less" : "and " + (A.length - CAPA) + " more") + "</button>";
-    }
-    if (B.length){
-      h += '<div class="side"><span class="s">side b · last week</span>' + (playing && B.some(g => g.id === playing) ? np(npNum) : '<span class="w">' + B.length + (B.length === 1 ? " track" : " tracks") + "</span>") + "</div>";
-      const shown = openB ? B : B.slice(0, CAPB);
-      h += shown.map(g => row(g, ++n, "old")).join("");
-      n += B.length - shown.length;
-      if (B.length > CAPB) h += '<button type="button" class="more" data-more="b">' + (openB ? "show less" : "and " + (B.length - CAPB) + " more") + "</button>";
-    }
-    if (O.length){
-      const weeks = [...new Set(O.map(g => weekKey(g.d)))];
-      h += '<div class="side"><span class="s">older</span>' + (playing && O.some(g => g.id === playing) ? np(npNum) : '<button type="button" class="more" data-more="o" style="padding:0">' + (openO ? "fold away" : O.length + " tracks · " + weeks.length + (weeks.length === 1 ? " week" : " weeks")) + "</button>") + "</div>";
-      if (openO) weeks.forEach(w => {
-        h += '<div class="wkh">week of ' + esc(parseDay(w).toLocaleDateString("en-US", {month: "short", day: "numeric"}).toLowerCase()) + "</div>";
-        O.filter(g => weekKey(g.d) === w).forEach(g => { h += row(g, list.indexOf(g) + 1, "older"); });
-      });
-    }
-    $("#list").innerHTML = h;
-    const x = $("#list").querySelector("[data-x]");
-    if (x) twoTap(x, "let it go", () => { const id = x.dataset.x; sel = null; if (playing === id) stop(true); removeEntry(id); render(); });
+    const rec = $("#rec"); rec.innerHTML = recordSVG(list.length, now);
+    freshTick = false;
+    renderPop();
+    rec.classList.toggle("playing", !!(pop && pop.kind === "play" && !pop.fading));
     $("#tx").placeholder = S.placeholder;
-    freshId = null;
-    const note = $("#note");
-    if (!list.length && !note.dataset.msg) note.textContent = "tap the record once there's something on it";
-    else if (!note.dataset.msg) note.textContent = "";
   }
 
-  function stop(silent){ playing = null; clearTimeout(playTimer); if (!silent) render(); }
+  function show(p, ms){
+    clearTimeout(popTimer); pop = p; render();
+    popTimer = setTimeout(hide, ms);
+  }
+  function hide(){
+    clearTimeout(popTimer);
+    const el = $("#slot .pop");
+    $("#rec").classList.remove("playing");
+    if (!el){ pop = null; render(); return; }
+    el.classList.add("out"); if (pop) pop.fading = true;
+    popTimer = setTimeout(() => { pop = null; render(); }, 450);
+  }
+
   $("#rec").addEventListener("click", () => {
-    if (playing){ stop(); return; }
+    if (pop && pop.kind === "play" && !pop.fading){ hide(); return; }   // second tap stops it (a tap while it fades plays the next one)
     const list = readLog();
-    if (!list.length){ flash("nothing on the record yet"); return; }
+    if (!list.length){ show({kind: "msg", text: "nothing on the record yet"}, 2600); return; }
     const pool = list.length > 1 ? list.filter(g => g.id !== lastPlayed) : list;
     const g = pool[Math.floor(Math.random() * pool.length)];
-    playing = lastPlayed = g.id; sel = null;
-    clearTimeout(playTimer); playTimer = setTimeout(() => stop(), Math.max(2, +S.playSeconds || 6) * 1000);
-    render();
-    const el = document.querySelector('.tr[data-id="' + CSS.escape(g.id) + '"]'); if (el && el.scrollIntoView) el.scrollIntoView({block: "nearest", behavior: "smooth"});
+    lastPlayed = g.id;
+    show({kind: "play", id: g.id}, Math.max(2, +S.playSeconds || 6) * 1000);
   });
-  function flash(t){ const n = $("#note"); n.textContent = t; n.dataset.msg = "1"; setTimeout(() => { delete n.dataset.msg; render(); }, 2600); }
-
-  $("#list").addEventListener("click", e => {
-    const more = e.target.closest("[data-more]");
-    if (more){ const k = more.dataset.more; if (k === "a") showAllA = !showAllA; else if (k === "b") showAllB = !showAllB; else showOlder = !showOlder; render(); return; }
-    if (e.target.closest("[data-x]")) return;              // handled by the two-tap below
-    const r = e.target.closest(".tr"); if (!r) return;
-    sel = sel === r.dataset.id ? null : r.dataset.id; render();
-  });
-  document.addEventListener("click", e => { if (sel && !e.composedPath().some(n => n.classList && n.classList.contains("tr"))){ sel = null; render(); } });
 
   $("#add").addEventListener("submit", e => {
     e.preventDefault();
     const g = addEntry($("#tx").value);
     if (!g){ $("#tx").focus(); return; }
-    $("#tx").value = ""; freshId = g.id; render();
+    $("#tx").value = ""; freshTick = true;
+    show({kind: "kept", id: g.id}, 2800);
   });
-
   migrate();
   render();
 })();
