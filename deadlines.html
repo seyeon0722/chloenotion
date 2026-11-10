@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>deadlines</title>
+<!--
+  chloe-countdown.html — deadline countdown for Notion /embed
+  Up to five deadlines (name + date, set in ••• settings). The nearest is shown big; the rest sit quietly below.
+  Past deadlines drop off by themselves the day after.
+  Fonts: Lyon Text if installed (Notion's serif), otherwise Source Serif 4 from Google Fonts.
+  No tracking, no other scripts. Click the label to edit; ••• (on hover) for settings. Saved in this browser only (localStorage).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&display=swap" rel="stylesheet">
+<script>
+/* ======================================================================
+   CONFIG — defaults. Changes made in the widget override these
+   (in this browser) until you press Reset.
+   ====================================================================== */
+const CONFIG = {
+  label: "deadlines",
+  deadlines: [                     // { name, date: "yyyy-mm-dd" } — up to five
+    // { name: "essay", date: "2026-11-13" }
+  ],
+  empty: "nothing due. breathe."   // shown when there's nothing ahead
+};
+/* ====================================================================== */
+</script>
+<style>
+:root{
+  --ink:#f2f2f2; --soft:rgba(242,242,242,.62); --mute:rgba(242,242,242,.4); --faint:rgba(242,242,242,.16); --hair:rgba(255,255,255,.08);
+  --card:#161616; --panel:#202020;
+  --serif:"Lyon-Text","Lyon Text","Source Serif 4",Georgia,ui-serif,serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:transparent}
+body{padding:12px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+[hidden]{display:none!important}
+.card{position:relative;max-width:390px;margin:0 auto;border-radius:20px;background:var(--card);border:1px solid var(--hair);container-type:inline-size}
+.pad{padding:clamp(20px,6cqi,28px) clamp(22px,6.6cqi,30px)}
+.mast{display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.lab{font:400 clamp(21px,6.4cqi,26px)/1.15 var(--serif);letter-spacing:-.012em;color:var(--ink);min-width:0;overflow-wrap:anywhere;padding:0 2px;margin-left:-2px}
+.idx{font:italic 400 14px/1 var(--serif);color:var(--mute);white-space:nowrap;margin-right:30px}
+.idx b{font-style:normal;font-weight:600;color:var(--soft)}
+.rule{height:1px;background:var(--hair)}
+.quiet{font:italic 400 14.5px/1.4 var(--serif);color:var(--mute)}
+[contenteditable]{outline:none;border-radius:6px;cursor:text;transition:background .2s}
+[contenteditable]:hover{background:rgba(255,255,255,.045)}
+[contenteditable]:focus{background:rgba(255,255,255,.07)}
+[contenteditable]:empty::before{content:attr(data-ph);opacity:.45}
+.menu{position:absolute;top:clamp(14px,4.6cqi,22px);right:clamp(14px,4.6cqi,22px);z-index:3;border:1px solid transparent;background:transparent;color:var(--mute);
+  width:30px;height:22px;border-radius:11px;font:600 12px/1 system-ui,sans-serif;letter-spacing:1px;cursor:pointer;opacity:0;transition:color .2s,border-color .2s,opacity .25s}
+.card:hover .menu,.menu.on,.menu:focus-visible{opacity:1}
+@media (hover:none){.menu{opacity:.55}}
+.menu:hover,.menu.on{color:var(--ink);border-color:var(--hair)}
+.menu:focus-visible{border-color:rgba(255,255,255,.3);outline:none}
+.rise{opacity:0;transform:translateY(6px);animation:rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.35s}
+@keyframes rise{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}}
+/* settings */
+.cfg .title{font:400 clamp(22px,6.4cqi,26px)/1.1 var(--serif);letter-spacing:-.012em;margin:0 0 2px}
+.cfg label{display:block;font:400 13.5px/1 var(--serif);color:var(--soft);margin:16px 0 7px}
+.cfg input[type=text],.cfg input[type=date],.cfg textarea{width:100%;background:var(--panel);border:1px solid transparent;border-radius:10px;color:var(--ink);
+  padding:9px 12px;font:400 15px/1.4 var(--serif);outline:none;transition:border-color .2s}
+.cfg input:focus,.cfg textarea:focus{border-color:rgba(255,255,255,.25)}
+.cfg .opts{display:flex;flex-wrap:wrap;gap:0 16px}
+.seg{display:inline-flex;background:var(--panel);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--soft);font:400 14px/1 var(--serif);padding:8px 12px;border-radius:999px;cursor:pointer;transition:background .2s,color .2s}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#161616}
+.foot{display:flex;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}
+.btn{border:1px solid rgba(255,255,255,.14);background:transparent;color:var(--ink);font:400 14.5px/1 var(--serif);padding:10px 18px;border-radius:999px;cursor:pointer;transition:border-color .2s,background .2s}
+.btn:hover{border-color:rgba(255,255,255,.35)}
+.btn.solid{background:var(--ink);border-color:var(--ink);color:#161616}
+.btn.solid:hover{background:#fff}
+.ghost{margin-left:auto;border:0;background:none;color:var(--mute);font:italic 400 14.5px var(--serif);cursor:pointer}
+.ghost:hover{color:var(--ink)}
+.hint{font:italic 400 14px/1.45 var(--serif);color:var(--mute);margin-top:12px}
+.hero{margin-top:clamp(14px,4cqi,20px)}
+.hero .what{font:400 clamp(17px,5cqi,20px)/1.3 var(--serif);color:var(--soft);overflow-wrap:anywhere}
+.hero .what em{color:var(--ink);font-style:normal}
+.hero .row{display:flex;align-items:flex-start;gap:.22em;margin-top:6px}
+.hero .num{font:500 clamp(58px,21cqi,84px)/.9 var(--serif);letter-spacing:-.025em;font-variant-numeric:lining-nums tabular-nums}
+.hero .word{font:500 clamp(42px,14cqi,58px)/1 var(--serif);letter-spacing:-.02em}
+.hero .unit{font:italic 400 clamp(18px,5.4cqi,22px)/1 var(--serif);color:var(--soft);margin-top:.4em}
+.hero .on{font:italic 400 14.5px/1.3 var(--serif);color:var(--mute);margin-top:10px}
+.list{margin-top:clamp(16px,4.6cqi,20px)}
+.item{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:11px 0;border-top:1px solid var(--hair)}
+.item .nm{font:400 15.5px/1.3 var(--serif);color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .in{font:italic 400 14.5px/1.3 var(--serif);color:var(--mute);white-space:nowrap}
+.none{font:italic 400 clamp(17px,5cqi,20px)/1.4 var(--serif);color:var(--soft);margin-top:clamp(18px,5cqi,24px);padding-bottom:6px}
+.cfg .dl{display:grid;grid-template-columns:1fr 150px;gap:8px;margin-bottom:8px}
+@container (max-width:340px){.cfg .dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <button class="menu" id="menu" aria-label="Settings" title="settings">•••</button>
+  <div class="pad">
+    <div id="view">
+      <div class="mast rise d1">
+        <div class="lab" id="lab" contenteditable="plaintext-only" spellcheck="false" data-ph="deadlines"></div>
+        <span class="idx" id="idx"></span>
+      </div>
+      <div id="out" class="rise d2"></div>
+    </div>
+    <div class="cfg" id="cfg" hidden></div>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  const KEY = "chloe_countdown_v1";
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const read = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  let saved = read(KEY), S = null;
+  function merge(){ const s = Object.assign(clone(CONFIG), clone(saved)); fix(s); return s; }
+  function set(patch){ Object.assign(saved, patch); write(KEY, saved); S = merge(); }
+  const dayKey = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const midnight = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const addDays = (d, n) => { const x = midnight(d); x.setDate(x.getDate() + n); return x; };
+  const weekStart = (d, startDay) => addDays(d, -((d.getDay() - startDay + 7) % 7));   // startDay: 1 = monday, 0 = sunday
+  const wdName = (d, len) => d.toLocaleDateString("en-US", {weekday: len || "long"}).toLowerCase();
+  function isoWeek(d){
+    const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    x.setUTCDate(x.getUTCDate() + 4 - (x.getUTCDay() || 7));
+    return Math.ceil(((x - Date.UTC(x.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+  }
+  const put = (el, t) => { if (document.activeElement !== el && el.textContent !== t) el.textContent = t; };
+  function editable(el, commit){
+    el.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); el.blur(); } if (e.key === "Escape"){ el.dataset.cancel = "1"; el.blur(); } });
+    el.addEventListener("paste", e => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " ")); });
+    el.addEventListener("blur", () => { if (el.dataset.cancel){ delete el.dataset.cancel; el.textContent = ""; } else commit(el.textContent.replace(/\s+/g, " ").trim()); render(); });
+  }
+  const seg = (k, v, opts) => '<div class="seg" data-k="' + k + '">' + opts.map(([o, l]) => '<button type="button" class="' + (String(v) === o ? "on" : "") + '" data-v="' + o + '">' + l + "</button>").join("") + "</div>";
+  function openCfg(){
+    const p = $("#cfg");
+    if (!p.hidden){ closeCfg(); return; }
+    p.innerHTML = '<div class="title">make it yours</div>' + cfgHTML() +
+      '<div class="foot"><button class="btn solid" id="c-save">save</button><button class="btn" id="c-cancel">cancel</button><button class="ghost" id="c-reset">reset</button></div>';
+    const tmp = {};
+    p.querySelectorAll(".seg").forEach(sg => { tmp[sg.dataset.k] = (sg.querySelector(".on") || {}).dataset ? sg.querySelector(".on").dataset.v : null;
+      sg.querySelectorAll("button").forEach(b => b.onclick = () => { tmp[sg.dataset.k] = b.dataset.v; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); }); });
+    $("#c-save").onclick = () => { set(cfgRead(p, tmp)); closeCfg(); };
+    $("#c-cancel").onclick = closeCfg;
+    let armed = false;
+    $("#c-reset").onclick = e => {
+      if (!armed){ armed = true; e.target.textContent = "tap again to reset"; setTimeout(() => { armed = false; if (e.target.isConnected) e.target.textContent = "reset"; }, 2500); return; }
+      try { localStorage.removeItem(KEY); } catch (err) {}
+      saved = {}; S = merge(); closeCfg();
+    };
+    $("#view").hidden = true; p.hidden = false; $("#menu").classList.add("on");
+  }
+  function closeCfg(){ $("#cfg").hidden = true; $("#cfg").innerHTML = ""; $("#view").hidden = false; $("#menu").classList.remove("on"); render(); }
+  $("#menu").addEventListener("click", openCfg);
+  window.addEventListener("storage", e => { if (e.key === KEY){ saved = read(KEY); S = merge(); } render(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+
+  const MAX = 5;
+  function fix(s){ s.deadlines = (Array.isArray(s.deadlines) ? s.deadlines : []).filter(d => d && d.name && /^\d{4}-\d{2}-\d{2}$/.test(d.date)).slice(0, MAX); }
+  const parse = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+  const daysTo = k => Math.round((parse(k) - midnight(new Date())) / 864e5);
+  const inWords = n => n === 0 ? "today" : n === 1 ? "tomorrow" : n < 14 ? n + " days" : n < 60 && n % 7 === 0 ? (n / 7) + " weeks" : n + " days";
+  function render(){
+    const items = S.deadlines.map(d => Object.assign({}, d, {n: daysTo(d.date)})).filter(d => d.n >= 0).sort((a, b) => a.n - b.n || a.name.localeCompare(b.name));
+    const out = $("#out");
+    $("#idx").textContent = items.length > 1 ? items.length + " ahead" : "";
+    if (!items.length){
+      out.innerHTML = '<div class="none">' + esc(S.empty) + '</div><div class="quiet">add one with ••• settings</div>';
+    } else {
+      const a = items[0], date = parse(a.date).toLocaleDateString("en-US", {weekday: "long", month: "long", day: "numeric"}).toLowerCase();
+      let big;
+      if (a.n === 0) big = '<div class="what"><em>' + esc(a.name) + '</em> is due</div><div class="row"><span class="word">today</span></div>';
+      else if (a.n === 1) big = '<div class="what"><em>' + esc(a.name) + '</em> is due</div><div class="row"><span class="word">tomorrow</span></div>';
+      else big = '<div class="what"><em>' + esc(a.name) + '</em> due in</div><div class="row"><span class="num">' + a.n + '</span><span class="unit">days</span></div>';
+      out.innerHTML = '<div class="hero">' + big + '<div class="on">' + esc(date) + "</div></div>" +
+        (items.length > 1 ? '<div class="list">' + items.slice(1).map(d => '<div class="item" title="' + esc(d.date) + '"><span class="nm">' + esc(d.name) + '</span><span class="in">' + esc(inWords(d.n)) + "</span></div>").join("") + "</div>" : "");
+    }
+    put($("#lab"), S.label);
+  }
+  editable($("#lab"), t => set({label: t || CONFIG.label}));
+  function cfgHTML(){
+    const rows = S.deadlines.filter(d => daysTo(d.date) >= 0);
+    let h = '<label for="c-l">label</label><input id="c-l" type="text" maxlength="40" value="' + esc(S.label) + '"><label>deadlines — name and date, up to five</label>';
+    for (let i = 0; i < MAX; i++){ const d = rows[i] || {name: "", date: ""};
+      h += '<div class="dl"><input type="text" data-n="' + i + '" maxlength="50" placeholder="' + (i ? "" : "e.g. essay") + '" value="' + esc(d.name) + '"><input type="date" data-d="' + i + '" value="' + esc(d.date) + '"></div>'; }
+    return h + '<label for="c-e">when nothing is due</label><input id="c-e" type="text" maxlength="60" value="' + esc(S.empty) + '">' +
+      '<div class="hint">past deadlines drop off on their own. clear a name to remove it.</div>';
+  }
+  function cfgRead(p){
+    const dl = [];
+    for (let i = 0; i < MAX; i++){ const n = p.querySelector('[data-n="' + i + '"]').value.trim(), d = p.querySelector('[data-d="' + i + '"]').value; if (n && d) dl.push({name: n, date: d}); }
+    return {label: $("#c-l").value.trim() || CONFIG.label, deadlines: dl, empty: $("#c-e").value.trim() || CONFIG.empty};
+  }
+
+  S = merge();
+  render();
+  setTimeout(function tick(){ render(); setTimeout(tick, 60000 - Date.now() % 60000 + 50); }, 60000 - Date.now() % 60000 + 50);
+})();
+</script>
+</body>
+</html>
