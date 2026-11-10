@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>the matchbook</title>
+<!--
+  chloe-matchbook.html — "the matchbook": each small good moment strikes a match, for Notion /embed
+  The week burns down from left to right. Past days are burnt, today's matches are lit, and the rest are still unstruck.
+  Tap a match to read its moment. A new book opens each Sunday; tap the cover to pull up an older moment.
+  Shares its log with chloe-good-record.html: localStorage "chloe_good_things_v1" = [{ id, t, d: "yyyy-mm-dd", ts }].
+  Imports the old glimmers jar once. Reset only changes settings, never your moments. ?demo=1 shows sample matches without saving anything.
+  Fonts: Lyon Text if installed (Notion's serif), otherwise Source Serif 4 from Google Fonts. No tracking, no other scripts.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;1,8..60,400;1,8..60,500&display=swap" rel="stylesheet">
+<script>
+/* ======================================================================
+   CONFIG — defaults. Changes made in the widget override these
+   (in this browser) until you press Reset.
+   ====================================================================== */
+const CONFIG = {
+  label: "the matchbook",
+  placeholder: "a small good thing…",
+  perDay: 3                        // matches drawn per day before it shows "+n"
+};
+/* ====================================================================== */
+</script>
+<style>
+:root{
+  --ink:#f2f2f2; --soft:rgba(242,242,242,.62); --mute:rgba(242,242,242,.4); --hair:rgba(255,255,255,.08);
+  --card:#161616; --panel:#202020;
+  --serif:"Lyon-Text","Lyon Text","Source Serif 4",Georgia,ui-serif,serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:transparent}
+body{padding:10px;color:var(--ink);font-family:var(--serif);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+[hidden]{display:none!important}
+.card{position:relative;width:100%;max-width:330px;margin:0 auto;border-radius:18px;background:var(--card);border:1px solid var(--hair);container-type:inline-size}
+.pad{padding:20px 20px 18px}
+.mast{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.lab{font:400 21px/1.15 var(--serif);letter-spacing:-.012em;min-width:0;overflow-wrap:anywhere;padding:0 2px;margin-left:-2px}
+.idx{font:italic 400 13.5px/1 var(--serif);color:var(--mute);white-space:nowrap;margin-right:30px}
+.idx b{font-style:normal;font-weight:400;color:var(--soft)}
+.vis{display:flex;justify-content:center;margin-top:12px;color:var(--soft)}
+.vis svg{width:100%;height:auto;display:block;overflow:visible}
+svg text{font-family:var(--serif)}
+.memo{position:relative;margin-top:12px;padding:12px 14px 10px;background:var(--panel);border-radius:12px;animation:fade .45s ease}
+@keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.memo .q{font:italic 400 15px/1.4 var(--serif);color:var(--ink);overflow-wrap:anywhere}
+.memo .m{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:7px}
+.memo .when{font:400 12.5px/1 var(--serif);color:var(--mute)}
+.x{border:0;background:none;color:var(--mute);font:italic 400 12.5px/1 var(--serif);cursor:pointer;padding:3px 0;white-space:nowrap}
+.x:hover{color:var(--ink)}
+.add{display:flex;align-items:center;gap:8px;margin-top:14px;padding:3px 6px 3px 14px;background:var(--panel);border-radius:999px;border:1px solid transparent;transition:border-color .2s}
+.add:focus-within{border-color:rgba(255,255,255,.22)}
+.add input{flex:1;min-width:0;background:transparent;border:0;color:var(--ink);padding:7px 0;font:400 14.5px/1.3 var(--serif);outline:none}
+.add input::placeholder{color:var(--mute);font-style:italic}
+.add button{border:0;background:none;color:var(--ink);font:italic 400 14px/1 var(--serif);padding:8px 8px;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,.3);text-underline-offset:3px}
+.add button:hover{text-decoration-color:var(--ink)}
+[contenteditable]{outline:none;border-radius:6px;cursor:text;transition:background .2s}
+[contenteditable]:hover{background:rgba(255,255,255,.045)}
+[contenteditable]:focus{background:rgba(255,255,255,.07)}
+[contenteditable]:empty::before{content:attr(data-ph);opacity:.45}
+.menu{position:absolute;top:16px;right:14px;z-index:3;border:1px solid transparent;background:transparent;color:var(--mute);
+  width:30px;height:22px;border-radius:11px;font:600 12px/1 system-ui,sans-serif;letter-spacing:1px;cursor:pointer;opacity:0;transition:color .2s,border-color .2s,opacity .25s}
+.card:hover .menu,.menu.on,.menu:focus-visible{opacity:1}
+@media (hover:none){.menu{opacity:.55}}
+.menu:hover,.menu.on{color:var(--ink);border-color:var(--hair)}
+.rise{opacity:0;transform:translateY(6px);animation:rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.35s}
+@keyframes rise{to{opacity:1;transform:none}}
+.cfg .title{font:400 21px/1.1 var(--serif);letter-spacing:-.012em;margin:0 0 2px}
+.cfg label{display:block;font:400 13px/1 var(--serif);color:var(--soft);margin:14px 0 7px}
+.cfg input[type=text]{width:100%;background:var(--panel);border:1px solid transparent;border-radius:10px;color:var(--ink);padding:9px 12px;font:400 14.5px/1.4 var(--serif);outline:none}
+.cfg input:focus{border-color:rgba(255,255,255,.25)}
+.foot{display:flex;gap:8px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.btn{border:1px solid rgba(255,255,255,.14);background:transparent;color:var(--ink);font:400 14px/1 var(--serif);padding:9px 16px;border-radius:999px;cursor:pointer}
+.btn:hover{border-color:rgba(255,255,255,.35)}
+.btn.solid{background:var(--ink);border-color:var(--ink);color:#161616}
+.ghost{margin-left:auto;border:0;background:none;color:var(--mute);font:italic 400 14px var(--serif);cursor:pointer}
+.ghost:hover{color:var(--ink)}
+.hint{font:italic 400 13px/1.45 var(--serif);color:var(--mute);margin-top:12px}
+
+.vis{color:var(--soft)}
+.vis svg{display:block;overflow:visible}
+.vis .m{cursor:pointer}
+.vis .m:hover{color:var(--ink)}
+.vis .m.on{color:var(--ink)}
+.vis .cover{cursor:pointer}
+.vis .cover:hover rect{opacity:.5}
+.vis .lit{color:var(--ink)}
+.flame{transform-box:fill-box;transform-origin:50% 100%;animation:flick 2.6s ease-in-out infinite}
+@keyframes flick{0%,100%{transform:scale(1,1) skewX(0)}25%{transform:scale(.97,1.04) skewX(1.5deg)}50%{transform:scale(1.02,.97) skewX(-1deg)}75%{transform:scale(.98,1.03) skewX(.8deg)}}
+.strike .flame{animation:catch .7s .32s cubic-bezier(.2,.7,.2,1) both,flick 2.6s 1.05s ease-in-out infinite}
+@keyframes catch{0%{opacity:0;transform:scale(.2,.1)}60%{opacity:1;transform:scale(1.05,1.08)}100%{opacity:1;transform:none}}
+.spark{opacity:0}
+.strike .spark{animation:spark .5s ease-out both}
+@keyframes spark{0%{opacity:0;transform:scale(.3)}25%{opacity:.9}100%{opacity:0;transform:scale(1.25)}}
+.spark{transform-box:fill-box;transform-origin:50% 50%}
+.strike .headf{animation:glow .6s ease-out both}
+@keyframes glow{0%{fill-opacity:.15}40%{fill-opacity:1}100%{fill-opacity:.7}}
+.days{display:grid;grid-template-columns:repeat(7,1fr);margin:6px 6.15% 0;font:400 11.5px/1 var(--serif);color:var(--mute);text-align:center}
+.days .now{color:var(--ink);font-style:italic}
+.latest{font:italic 400 14px/1.45 var(--serif);color:var(--mute);text-align:center;margin-top:10px;overflow-wrap:anywhere}
+.latest em{font-style:normal;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.rise{animation:none;opacity:1;transform:none}.flame,.strike .flame,.strike .spark,.memo{animation:none}}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <button class="menu" id="menu" aria-label="Settings" title="settings">•••</button>
+  <div class="pad">
+    <div id="view">
+      <div class="mast rise d1">
+        <div class="lab" id="lab" contenteditable="plaintext-only" spellcheck="false" data-ph="the matchbook"></div>
+        <span class="idx" id="idx"></span>
+      </div>
+      <div class="vis rise d2" id="book"></div>
+      <div class="days rise d2" id="days"></div>
+      <div class="latest rise d3" id="latest"></div>
+      <div id="memo"></div>
+      <form class="add rise d4" id="add" autocomplete="off"><input id="tx" type="text" maxlength="140" aria-label="a small good thing"><button type="submit">strike</button></form>
+    </div>
+    <div class="cfg" id="cfg" hidden></div>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  const CFGKEY = "chloe_matchbook_cfg_v1", CFGHINT = "tap a match to read its moment; tap the cover for an older one.";
+  // ======================= shared "good things" core (same in both widgets) =======================
+  const LOG = "chloe_good_things_v1", MIGRATED = "chloe_good_things_migrated_v1", GLIMMERS = "chloe_glimmers_v1", MAX = 1000;
+  const DEMO = new URLSearchParams(location.search).get("demo") === "1";
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const dayKey = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const parseDay = k => { const [y, m, d] = String(k).split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+  const addDays = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x; };
+  const weekStart = d => addDays(d, -d.getDay());                       // weeks run sunday → saturday
+  const weekKey = k => dayKey(weekStart(parseDay(k)));
+  const okDay = k => /^\d{4}-\d{2}-\d{2}$/.test(k);
+  function isoWeek(d){
+    const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    x.setUTCDate(x.getUTCDate() + 4 - (x.getUTCDay() || 7));
+    return Math.ceil(((x - Date.UTC(x.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+  }
+  const readObj = k => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+  const writeRaw = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
+
+  // clean one entry; keeps unknown fields so nothing is ever lost
+  function norm(g, i){
+    if (!g || typeof g.t !== "string" || !g.t.trim()) return null;
+    const d = okDay(g.d) ? g.d : (g.ts ? dayKey(new Date(g.ts)) : dayKey(new Date()));
+    return Object.assign({}, g, {id: g.id ? String(g.id) : "gt" + i + "-" + uid(), t: g.t, d, ts: +g.ts || parseDay(d).getTime() + 12 * 36e5});
+  }
+  function readStored(){
+    let raw = null; try { raw = localStorage.getItem(LOG); } catch (e) {}
+    if (raw == null) return [];
+    let v; try { v = JSON.parse(raw); } catch (e) { v = null; }
+    if (!Array.isArray(v)){                                  // unexpected data: keep a copy before anything writes over it
+      try { if (localStorage.getItem(LOG + "_backup") == null) localStorage.setItem(LOG + "_backup", raw); } catch (e) {}
+      return [];
+    }
+    const list = v.map(norm).filter(Boolean);
+    if (list.some((g, i) => !v[i] || !v[i].id || !v[i].ts)) writeRaw(LOG, list);   // older entries get ids / ts, once
+    return list;
+  }
+  // one-time import from the old glimmers jar (deduped by id, so it is safe to run twice)
+  function migrate(){
+    if (DEMO) return;
+    try { if (localStorage.getItem(MIGRATED)) return; } catch (e) { return; }
+    let old = []; try { old = JSON.parse(localStorage.getItem(GLIMMERS)); } catch (e) {}
+    if (Array.isArray(old) && old.length){
+      const list = readStored(), have = new Set(list.map(g => g.id));
+      old.forEach((g, i) => { const n = norm(Object.assign({}, g, {id: g && g.id ? "gl-" + g.id : "gl-" + i + "-" + String(g && g.t).slice(0, 12), from: "glimmers"}), i); if (n && !have.has(n.id)){ list.push(n); have.add(n.id); } });
+      list.sort((a, b) => a.ts - b.ts);
+      writeRaw(LOG, list);
+    }
+    try { localStorage.setItem(MIGRATED, String(Date.now())); } catch (e) {}
+  }
+
+  // demo: sample entries in memory only — nothing is written to storage
+  let demoList = null;
+  function demoData(){
+    const now = new Date(), ws = weekStart(now), out = [];
+    const samples = [
+      [0, "first coffee on the fire escape"], [0, "olives at the bar, on the house"], [-1, "sam texted just to say hi"],
+      [-2, "the library at dusk, all to myself"], [-3, "mom sent a photo of the dog"], [-3, "new pen, smooth ink"], [-4, "a stranger held the door and smiled"],
+      [-7, "the record skipped and we laughed"], [-8, "a quiet hour with nothing due"], [-9, "long walk home under the streetlights"],
+      [-10, "the first cold morning, finally"], [-12, "fresh sheets"], [-15, "a letter in the mail"], [-19, "candle lit, rain outside"]];
+    samples.forEach(([off, t], i) => {
+      let d = addDays(now, off);
+      if (off === 0 || off === -1){ /* keep */ } else if (d < ws && off > -7) d = addDays(ws, -1 - i % 3);   // stay sensible early in the week
+      out.push({id: "demo" + i, t, d: dayKey(d), ts: Math.min(parseDay(dayKey(d)).getTime() + (9 + i % 10) * 36e5, Date.now() - (30 - i) * 6e4)});
+    });
+    // thu-ish: a busy day to show "+n"
+    if (now.getDay() >= 2) [1, 2, 3].forEach(j => out.push({id: "demob" + j, t: ["a good song on shuffle", "warm bread from the corner", "finished the reading early"][j - 1], d: dayKey(addDays(now, -1)), ts: parseDay(dayKey(addDays(now, -1))).getTime() + (12 + j) * 36e5}));
+    return out.filter(g => g.d <= dayKey(now)).sort((a, b) => a.ts - b.ts);
+  }
+  function readLog(){ if (DEMO){ if (!demoList) demoList = demoData(); return demoList.slice(); } return readStored(); }
+  // every change re-reads the log first, so an entry kept in another embed is never overwritten
+  function saveLog(mutate){
+    const list = readLog(); mutate(list);
+    const out = list.length > MAX ? list.slice(-MAX) : list;
+    if (DEMO){ demoList = out; return true; }
+    return writeRaw(LOG, out);
+  }
+  function addEntry(text){
+    const t = String(text).replace(/\s+/g, " ").trim().slice(0, 140); if (!t) return null;
+    const g = {id: uid(), t, d: dayKey(new Date()), ts: Date.now()};
+    saveLog(list => list.push(g)); return g;
+  }
+  function removeEntry(id){ saveLog(list => { const i = list.findIndex(g => g.id === id); if (i >= 0) list.splice(i, 1); }); }
+
+  // two-tap confirm on a button
+  function twoTap(btn, label, fn){
+    let armed = false;
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      if (!armed){ armed = true; btn.textContent = "tap again to let go"; setTimeout(() => { armed = false; if (btn.isConnected) btn.textContent = label; }, 2500); return; }
+      fn();
+    });
+  }
+
+  // settings (title + hint text); reset touches settings only
+  let saved = readObj(CFGKEY), S = Object.assign({}, CONFIG, saved);
+  function setCfg(p){ Object.assign(saved, p); writeRaw(CFGKEY, saved); S = Object.assign({}, CONFIG, saved); }
+  function openCfg(){
+    const p = $("#cfg");
+    if (!p.hidden){ closeCfg(); return; }
+    p.innerHTML = '<div class="title">make it yours</div>' +
+      '<label for="c-l">title</label><input id="c-l" type="text" maxlength="40" value="' + esc(S.label) + '">' +
+      '<label for="c-p">hint in the box</label><input id="c-p" type="text" maxlength="60" value="' + esc(S.placeholder) + '">' +
+      '<div class="hint">' + CFGHINT + ' shared with the other good-things widget. reset only changes these words — your moments stay. saved in this browser only.</div>' +
+      '<div class="foot"><button class="btn solid" id="c-save">save</button><button class="btn" id="c-cancel">cancel</button><button class="ghost" id="c-reset">reset</button></div>';
+    $("#c-save").onclick = () => { setCfg({label: $("#c-l").value.trim() || CONFIG.label, placeholder: $("#c-p").value.trim() || CONFIG.placeholder}); closeCfg(); };
+    $("#c-cancel").onclick = closeCfg;
+    let armed = false;
+    $("#c-reset").onclick = e => {
+      if (!armed){ armed = true; e.target.textContent = "tap again to reset"; setTimeout(() => { armed = false; if (e.target.isConnected) e.target.textContent = "reset"; }, 2500); return; }
+      try { localStorage.removeItem(CFGKEY); } catch (err) {}
+      saved = {}; S = Object.assign({}, CONFIG); closeCfg();
+    };
+    $("#view").hidden = true; p.hidden = false; $("#menu").classList.add("on");
+  }
+  function closeCfg(){ $("#cfg").hidden = true; $("#cfg").innerHTML = ""; $("#view").hidden = false; $("#menu").classList.remove("on"); render(); }
+  $("#menu").addEventListener("click", openCfg);
+
+  // click-to-edit title
+  const lab = $("#lab");
+  lab.addEventListener("keydown", e => { if (e.key === "Enter"){ e.preventDefault(); lab.blur(); } if (e.key === "Escape"){ lab.dataset.cancel = "1"; lab.blur(); } });
+  lab.addEventListener("blur", () => { if (lab.dataset.cancel){ delete lab.dataset.cancel; lab.textContent = ""; } else setCfg({label: lab.textContent.replace(/\s+/g, " ").trim() || CONFIG.label}); render(); });
+  const putLabel = () => { if (document.activeElement !== lab && lab.textContent !== S.label) lab.textContent = S.label; };
+
+  window.addEventListener("storage", e => {
+    if (e.key === CFGKEY){ saved = readObj(CFGKEY); S = Object.assign({}, CONFIG, saved); render(); }
+    if (!DEMO && (e.key === LOG || e.key === null)) render();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+  setTimeout(function tick(){ render(); setTimeout(tick, 60000 - Date.now() % 60000 + 50); }, 60000 - Date.now() % 60000 + 50);   // day / week roll over
+  // ===================================================================================================
+
+
+  // ---------------------------- matchbook ----------------------------
+  let open = null, freshId = null, memoMsg = null;   // open = {id, from:"match"|"cover"}
+  const DAYS = ["su", "mo", "tu", "we", "th", "fr", "sa"];
+  const wdLong = k => parseDay(k).toLocaleDateString("en-US", {weekday: "long"}).toLowerCase();
+  const f = n => n.toFixed(2);
+
+  function burnt(x, k, on){
+    const top = 92 + (k % 2) * 5, bend = k % 2 ? 2.2 : -2;
+    return '<path d="M' + f(x) + " 132 V" + (top + 10) + " Q" + f(x) + " " + (top + 3) + " " + f(x + bend) + " " + top + '"/>' +
+      '<path d="M' + f(x + bend - 2.6) + " " + (top - 1) + ' q2.6 -4.6 5.2 0 q-2.6 3.2 -5.2 0 z" fill="currentColor" fill-opacity="' + (on ? .85 : .4) + '"/>';
+  }
+  function lit(x){
+    return '<g class="lit"><path d="M' + f(x) + ' 132 V72"/><ellipse class="headf" cx="' + f(x) + '" cy="67" rx="3.6" ry="5" fill="currentColor" fill-opacity=".7"/>' +
+      '<g class="spark" stroke-width="1"><path d="M' + f(x - 5) + " 63 l-4 -3 M" + f(x + 5) + " 63 l4 -3 M" + f(x - 6) + " 68 h-4 M" + f(x + 6) + ' 68 h4"/><circle cx="' + f(x - 8) + '" cy="58" r=".9" fill="currentColor" stroke="none"/><circle cx="' + f(x + 8.5) + '" cy="59" r=".8" fill="currentColor" stroke="none"/></g>' +
+      '<g class="flame"><path d="M' + f(x) + " 40 C" + f(x + 5) + " 47 " + f(x + 6.5) + " 53 " + f(x + 4) + " 58 C" + f(x + 2.6) + " 60.5 " + f(x + 1.3) + " 61 " + f(x) + " 61 C" + f(x - 1.3) + " 61 " + f(x - 2.6) + " 60.5 " + f(x - 4) + " 58 C" + f(x - 6.5) + " 53 " + f(x - 5) + " 47 " + f(x) + ' 40 Z"/>' +
+      '<path d="M' + f(x) + " 49 C" + f(x + 2) + " 52.5 " + f(x + 2.6) + " 55 " + f(x + 1.3) + " 57 C" + f(x + .6) + " 57.8 " + f(x - .6) + " 57.8 " + f(x - 1.3) + " 57 C" + f(x - 2.6) + " 55 " + f(x - 2) + " 52.5 " + f(x) + ' 49 Z" fill="currentColor" fill-opacity=".5" stroke="none"/></g></g>';
+  }
+  const unstruck = x => '<path d="M' + f(x) + ' 132 V72" opacity=".3"/><ellipse cx="' + f(x) + '" cy="67" rx="3.6" ry="5" opacity=".3"/>';
+
+  function render(){
+    const now = new Date(), today = dayKey(now), ws = weekStart(now), thisW = dayKey(ws);
+    const all = readLog(), week = all.filter(g => weekKey(g.d) === thisW).sort((a, b) => a.ts - b.ts);   // oldest first = match order
+    if (open && !all.some(g => g.id === open.id)) open = null;
+    putLabel();
+    $("#idx").innerHTML = "<b>" + week.length + "</b> struck" + (DEMO ? " · demo" : "");
+    const per = Math.max(1, Math.min(4, Math.round(+S.perDay) || 3)), colW = 228 / 7;
+    let h = '<g class="cover" id="cover" role="button" tabindex="0" aria-label="pull up an older moment"><rect x="16" y="4" width="228" height="48" rx="3" opacity=".3"/>' +
+      '<text x="130" y="32" text-anchor="middle" font-size="10" font-style="italic" fill="currentColor" stroke="none" opacity=".5">good things · week ' + isoWeek(now) + "</text></g>";
+    let labels = "";
+    for (let d = 0; d < 7; d++){
+      const key = dayKey(addDays(ws, d)), es = week.filter(g => g.d === key), cx0 = 16 + colW * d + colW / 2;
+      const shown = es.slice(-per), extra = es.length - shown.length;   // newest few; "+n" for the rest
+      const n = shown.length || (key > today ? 2 : 1);
+      if (!shown.length){ for (let k = 0; k < n; k++) h += unstruck(cx0 + (k - (n - 1) / 2) * 9.5); }
+      shown.forEach((g, k) => {
+        const x = cx0 + (k - (n - 1) / 2) * 9.5, on = open && open.id === g.id;
+        h += '<g class="m' + (on ? " on" : "") + (g.id === freshId ? " strike" : "") + '" data-id="' + esc(g.id) + '" role="button" tabindex="0" aria-label="' + esc(g.t) + '"><rect x="' + f(x - 4.75) + '" y="38" width="9.5" height="94" fill="transparent" stroke="none"/>' +
+          (key < today ? burnt(x, k, on) : lit(x)) + "</g>";
+      });
+      if (extra > 0) labels += '<text x="' + f(cx0) + '" y="' + (key < today ? 80 : 34) + '" text-anchor="middle" font-size="8.5" font-style="italic" fill="currentColor" stroke="none" opacity=".55">+' + extra + "</text>";
+    }
+    h += '<rect x="16" y="126" width="228" height="44" rx="3" fill="var(--card)"/><rect x="16" y="126" width="228" height="44" rx="3"/>' +
+      '<path d="M26 156 H234" opacity=".28" stroke-dasharray="1 2.2" stroke-width="3"/>' + labels;
+    $("#book").innerHTML = '<svg viewBox="0 0 260 176" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">' + h + "</svg>";
+    $("#days").innerHTML = DAYS.map((s, d) => '<span' + (dayKey(addDays(ws, d)) === today ? ' class="now"' : "") + ">" + s + "</span>").join("");
+
+    const todays = week.filter(g => g.d === today);
+    $("#latest").innerHTML = todays.length ? "today · <em>" + esc(todays[todays.length - 1].t) + "</em>" : (week.length ? "nothing struck yet today" : "a new book · nothing struck yet");
+
+    let m = "";
+    if (open){
+      const g = all.find(x => x.id === open.id), i = week.indexOf(g);
+      const when = i >= 0 ? wdLong(g.d) + " · match " + (i + 1)
+        : "week " + isoWeek(parseDay(g.d)) + " · " + parseDay(g.d).toLocaleDateString("en-US", {weekday: "long", month: "short", day: "numeric"}).toLowerCase();
+      m = '<div class="memo"><div class="q">“' + esc(g.t) + '”</div><div class="m"><span class="when">' + esc(when) + '</span><button type="button" class="x" id="letgo">let it go</button></div></div>';
+    } else if (memoMsg) m = '<div class="memo"><div class="q" style="color:var(--mute)">' + esc(memoMsg) + "</div></div>";
+    $("#memo").innerHTML = m;
+    const lg = $("#letgo");
+    if (lg) twoTap(lg, "let it go", () => { const id = open.id; open = null; removeEntry(id); render(); });
+    $("#tx").placeholder = S.placeholder;
+    freshId = null;
+  }
+
+  function pick(el){
+    if (!el) return;
+    memoMsg = null;
+    open = open && open.id === el.dataset.id ? null : {id: el.dataset.id, from: "match"};
+    render();
+  }
+  function cover(){
+    const ws = dayKey(weekStart(new Date())), older = readLog().filter(g => g.d < ws);
+    if (!older.length){ open = null; memoMsg = "older books show up here after sunday"; render(); return; }
+    const pool = older.length > 1 && open ? older.filter(g => g.id !== open.id) : older;
+    open = {id: pool[Math.floor(Math.random() * pool.length)].id, from: "cover"}; memoMsg = null; render();
+  }
+  $("#book").addEventListener("click", e => {
+    if (e.target.closest("#cover")) return cover();
+    pick(e.target.closest(".m"));
+  });
+  $("#book").addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target.closest("#cover")){ e.preventDefault(); return cover(); }
+    const el = e.target.closest(".m"); if (el){ e.preventDefault(); pick(el); }
+  });
+  document.addEventListener("click", e => {
+    if ((open || memoMsg) && !e.composedPath().some(n => n.id === "book" || n.id === "memo")){ open = null; memoMsg = null; render(); }
+  });
+
+  $("#add").addEventListener("submit", e => {
+    e.preventDefault();
+    const g = addEntry($("#tx").value);
+    if (!g){ $("#tx").focus(); return; }
+    $("#tx").value = ""; freshId = g.id; open = null; memoMsg = null; render();
+  });
+
+  migrate();
+  render();
+})();
+</script>
+</body>
+</html>
